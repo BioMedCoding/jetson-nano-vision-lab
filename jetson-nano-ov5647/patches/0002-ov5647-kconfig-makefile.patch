@@ -1,0 +1,23 @@
+--- a/kernel/kernel-4.9/drivers/media/i2c/Kconfig
++++ b/kernel/kernel-4.9/drivers/media/i2c/Kconfig
+@@ -761,6 +761,13 @@
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called ths7303.
+ 
++config VIDEO_OV5647
++    tristate "OmniVision OV5647 sensor support"
++    depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
++    depends on MEDIA_CAMERA_SUPPORT
++    help
++      This is a Video4Linux2 sensor-level driver for the OmniVision OV5647 camera.
++
+ config VIDEO_M52790
+ 	tristate "Mitsubishi M52790 A/V switch"
+ 	depends on VIDEO_V4L2 && I2C
+--- a/kernel/kernel-4.9/drivers/media/i2c/Makefile
++++ b/kernel/kernel-4.9/drivers/media/i2c/Makefile
+@@ -82,3 +82,4 @@
+ obj-$(CONFIG_VIDEO_ML86V7667)	+= ml86v7667.o
+ obj-$(CONFIG_VIDEO_OV2659)	+= ov2659.o
+ obj-$(CONFIG_VIDEO_TC358743)	+= tc358743.o
++obj-$(CONFIG_VIDEO_OV5647) += ov5647.o

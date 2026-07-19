@@ -1,0 +1,8 @@
+# Repo unificata: jetson-nano-ov5647/ e cv_training/ hanno gia' un proprio
+# .gitignore (git li rispetta a qualunque profondita', non serve unirli qui
+# dentro) -- questo file copre solo cruft che potrebbe finire alla radice.
+.DS_Store
+*~
+.venv/
+__pycache__/
+*.pyc

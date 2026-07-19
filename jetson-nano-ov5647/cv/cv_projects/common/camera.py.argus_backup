@@ -1,0 +1,33 @@
+# -*- coding: utf-8 -*-
+"""Helper per la camera CSI (OV5647) su Jetson Nano via GStreamer/nvarguscamerasrc."""
+import cv2
+
+
+def gstreamer_pipeline(width=640, height=480, fps=30, flip=0):
+    # drop=true + max-buffers=1: l'appsink tiene solo il frame piu' recente,
+    # cosi' la latenza non cresce quando l'inferenza e' piu' lenta della camera.
+    return (
+        "nvarguscamerasrc ! "
+        "video/x-raw(memory:NVMM), width={w}, height={h}, format=NV12, framerate={f}/1 ! "
+        "nvvidconv flip-method={flip} ! "
+        "video/x-raw, width={w}, height={h}, format=BGRx ! "
+        "videoconvert ! video/x-raw, format=BGR ! "
+        "appsink drop=true max-buffers=1 sync=false"
+    ).format(w=width, h=height, f=fps, flip=flip)
+
+
+def open_csi_camera(width=640, height=480, fps=30, flip=0):
+    """Apre la camera CSI. Solleva RuntimeError con suggerimenti se fallisce."""
+    pipe = gstreamer_pipeline(width, height, fps, flip)
+    cap = cv2.VideoCapture(pipe, cv2.CAP_GSTREAMER)
+    if not cap.isOpened():
+        raise RuntimeError(
+            "Impossibile aprire la camera CSI.\n"
+            "  Pipeline: {}\n"
+            "  Verifiche:\n"
+            "    1) il device esiste?            ls /dev/video0\n"
+            "    2) il daemon argus e' bloccato?  sudo systemctl restart nvargus-daemon\n"
+            "    3) cv2 ha GStreamer?  python -c \"import cv2; print(cv2.getBuildInformation())\" | grep -i gstreamer\n"
+            "       (se 'NO', stai usando un cv2 pip: serve quello di sistema, vedi setup/SETUP_GUIDE.md)".format(pipe)
+        )
+    return cap

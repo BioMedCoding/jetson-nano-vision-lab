@@ -1,0 +1,11 @@
+--- a/kernel/nvidia/drivers/trusty/trusty-ote.h
++++ b/kernel/nvidia/drivers/trusty/trusty-ote.h
+@@ -14,7 +14,7 @@
+  */
+ 
+ #ifndef _TRUSTY_OTE_H_
+-#define __TRUSTY_OTE_H_
++#define _TRUSTY_OTE_H_
+ /*
+  * NOTE: These OTE structures need to be in sync with the ones defined on
+  * $TOP/ote/lib

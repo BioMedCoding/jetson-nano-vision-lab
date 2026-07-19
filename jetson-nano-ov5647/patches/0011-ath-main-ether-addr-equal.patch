@@ -1,0 +1,11 @@
+--- a/kernel/kernel-4.9/drivers/net/wireless/ath/main.c
++++ b/kernel/kernel-4.9/drivers/net/wireless/ath/main.c
+@@ -64,7 +64,7 @@
+ {
+ 	return ieee80211_is_beacon(hdr->frame_control) &&
+ 		!is_zero_ether_addr(common->curbssid) &&
+-		ether_addr_equal_64bits(hdr->addr3, common->curbssid);
++		ether_addr_equal(hdr->addr3, common->curbssid);
+ }
+ EXPORT_SYMBOL(ath_is_mybeacon);
+ 

@@ -1,0 +1,11 @@
+--- a/kernel/nvidia/drivers/platform/tegra/rtcpu/vi-notify.c
++++ b/kernel/nvidia/drivers/platform/tegra/rtcpu/vi-notify.c
+@@ -471,7 +471,7 @@
+ 	if (vi_pdev == NULL)
+ 		return ERR_PTR(-EPROBE_DEFER);
+ 
+-	if (&vi_pdev->dev.driver == NULL) {
++	if (vi_pdev->dev.driver == NULL) {
+ 		platform_device_put(vi_pdev);
+ 		return ERR_PTR(-EPROBE_DEFER);
+ 	}

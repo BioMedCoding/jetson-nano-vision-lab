@@ -1,0 +1,27 @@
+--- a/kernel/kernel-4.9/include/linux/etherdevice.h
++++ b/kernel/kernel-4.9/include/linux/etherdevice.h
+@@ -342,17 +342,14 @@
+ static inline bool ether_addr_equal_64bits(const u8 addr1[6+2],
+ 					   const u8 addr2[6+2])
+ {
+-#if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) && BITS_PER_LONG == 64
+-	u64 fold = (*(const u64 *)addr1) ^ (*(const u64 *)addr2);
+-
+-#ifdef __BIG_ENDIAN
+-	return (fold >> 16) == 0;
+-#else
+-	return (fold << 16) == 0;
+-#endif
+-#else
++	/*
++	 * The 8-byte word compare below assumes addr1/addr2 are backed by
++	 * an 8-byte-capable buffer; several callers pass a bare 6-byte
++	 * array (e.g. struct ieee80211_hdr fields), which is flagged as an
++	 * out-of-bounds read by modern GCC (-Wstringop-overread). Always
++	 * take the byte-wise-safe path instead of relying on that layout.
++	 */
+ 	return ether_addr_equal(addr1, addr2);
+-#endif
+ }
+ 
+ /**

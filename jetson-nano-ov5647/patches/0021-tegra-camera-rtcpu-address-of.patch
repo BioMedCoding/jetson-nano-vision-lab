@@ -1,0 +1,11 @@
+--- a/kernel/nvidia/drivers/platform/tegra/tegra-camera-rtcpu.c
++++ b/kernel/nvidia/drivers/platform/tegra/tegra-camera-rtcpu.c
+@@ -1132,7 +1132,7 @@
+ 	if (pdev == NULL)
+ 		return ERR_PTR(-EPROBE_DEFER);
+ 
+-	if (&pdev->dev.driver == NULL) {
++	if (pdev->dev.driver == NULL) {
+ 		platform_device_put(pdev);
+ 		return ERR_PTR(-EPROBE_DEFER);
+ 	}

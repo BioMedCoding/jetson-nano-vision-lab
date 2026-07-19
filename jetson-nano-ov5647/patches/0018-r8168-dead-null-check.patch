@@ -1,0 +1,11 @@
+--- a/kernel/nvidia/drivers/net/ethernet/realtek/r8168_n.c
++++ b/kernel/nvidia/drivers/net/ethernet/realtek/r8168_n.c
+@@ -27694,7 +27694,7 @@
+         assert(tp != NULL);
+         assert(ioaddr != NULL);
+ 
+-        if ((tp->RxDescArray == NULL) || (tp->Rx_skbuff == NULL))
++        if (tp->RxDescArray == NULL)
+                 goto rx_out;
+ 
+         rx_quota = RTL_RX_QUOTA(budget);

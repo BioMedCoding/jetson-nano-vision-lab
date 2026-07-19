@@ -1,0 +1,15 @@
+--- a/kernel/kernel-4.9/drivers/virtio/virtio_pci_common.c
++++ b/kernel/kernel-4.9/drivers/virtio/virtio_pci_common.c
+@@ -115,9 +115,12 @@
+ 	for (i = 0; i < vp_dev->msix_used_vectors; ++i)
+ 		free_irq(vp_dev->msix_entries[i].vector, vp_dev);
+ 
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Waddress"
+ 	for (i = 0; i < vp_dev->msix_vectors; i++)
+ 		if (vp_dev->msix_affinity_masks[i])
+ 			free_cpumask_var(vp_dev->msix_affinity_masks[i]);
++#pragma GCC diagnostic pop
+ 
+ 	if (vp_dev->msix_enabled) {
+ 		/* Disable the vector used for configuration */

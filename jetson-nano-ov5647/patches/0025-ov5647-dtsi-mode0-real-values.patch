@@ -1,0 +1,65 @@
+diff --git a/hardware/nvidia/platform/t210/porg/kernel-dts/porg-platforms/tegra210-camera-ov5647.dtsi b/hardware/nvidia/platform/t210/porg/kernel-dts/porg-platforms/tegra210-camera-ov5647.dtsi
+index 326d1174b..6aeeb3caa 100644
+--- a/hardware/nvidia/platform/t210/porg/kernel-dts/porg-platforms/tegra210-camera-ov5647.dtsi
++++ b/hardware/nvidia/platform/t210/porg/kernel-dts/porg-platforms/tegra210-camera-ov5647.dtsi
+@@ -167,7 +167,19 @@
+ 				* Sensor embedded metadata height in units of rows.
+ 				* If sensor does not support embedded metadata value should be 0.
+ 				*/
+-				mode0 { /* ov5647_MODE_3264x2464_21FPS */
++				mode0 { /* ov5647_MODE_640x480_2x2binned_10bpp -- the ONLY
++					 * mode this driver's ov5647_stream_on() actually
++					 * programs (ov5647_640x480 register table, ported
++					 * from upstream drivers/media/i2c/ov5647.c's
++					 * ov5647_640x480_10bpp mode). The other modeN
++					 * siblings below describe modes this driver never
++					 * streams and are kept only because
++					 * sensor_common_parse_num_modes() requires at
++					 * least one modeN child to exist; mode_prop_idx
++					 * in ov5647.c always selects this one (index 0).
++					 * pix_clk_hz/line_length come from the upstream
++					 * driver's verified .pixel_rate=58333000 and
++					 * .hts=1852 for this exact mode. */
+ 					mclk_khz = "24000";
+ 					num_lanes = "2";
+ 					tegra_sinterface = "serial_a";
+@@ -176,14 +188,14 @@
+ 					dpcm_enable = "false";
+ 					cil_settletime = "0";
+ 
+-					active_w = "3264";
+-					active_h = "2464";
+-					pixel_t = "bayer_rggb";
+-					readout_orientation = "90";
+-					line_length = "3448";
++					active_w = "640";
++					active_h = "480";
++					pixel_t = "bayer_bggr";
++					readout_orientation = "0";
++					line_length = "1852";
+ 					inherent_gain = "1";
+ 					mclk_multiplier = "9.33";
+-					pix_clk_hz = "182400000";
++					pix_clk_hz = "58333000";
+ 
+ 					gain_factor = "16";
+ 					framerate_factor = "1000000";
+@@ -195,15 +207,15 @@
+ 					min_hdr_ratio = "1";
+ 					max_hdr_ratio = "1";
+ 					min_framerate = "2000000"; /* 2.0 fps */
+-					max_framerate = "21000000"; /* 21.0 fps */
++					max_framerate = "62000000"; /* 62.0 fps */
+ 					step_framerate = "1";
+-					default_framerate = "21000000"; /* 21.0 fps */
++					default_framerate = "62000000"; /* 62.0 fps */
+ 					min_exp_time = "13"; /* us */
+ 					max_exp_time = "683709"; /* us */
+ 					step_exp_time = "1";
+ 					default_exp_time = "2495"; /* us */
+ 
+-					embedded_metadata_height = "2";
++					embedded_metadata_height = "0";
+ 				};
+ 				mode1 { /* ov5647_MODE_3264x1848_28FPS */
+ 					mclk_khz = "24000";

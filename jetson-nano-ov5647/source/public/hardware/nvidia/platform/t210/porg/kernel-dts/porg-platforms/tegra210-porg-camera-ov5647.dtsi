@@ -1,0 +1,55 @@
+/*
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "tegra210-camera-ov5647.dtsi"
+
+#define CAM1_PWDN                TEGRA_GPIO(S, 7)
+#define CAM_I2C_MUX              TEGRA_GPIO(I, 0)
+
+/ {
+        host1x {
+                i2c@546c0000 {
+                        rbpcv2_ov5647_a@36 {
+                                reset-gpios = <&gpio CAM1_PWDN GPIO_ACTIVE_HIGH>;
+                        };
+                };
+        };
+
+        gpio@6000d000 {
+                /*
+                 * The mainline ov5647 driver does not drive reset-gpios,
+                 * so keep the CAM0 enable line high from boot.
+                 */
+                camera-control-output-high {
+                        gpio-hog;
+                        output-high;
+                        gpios = < CAM1_PWDN 0 >;
+                        label = "cam1-pwdn";
+                };
+                /*
+                 * B02 carrier routes CAM_I2C to the two connectors through
+                 * an analog switch; low selects CAM0.
+                 */
+                camera-i2c-mux-low {
+                        gpio-hog;
+                        output-low;
+                        gpios = < CAM_I2C_MUX 0 >;
+                        label = "cam-i2c-mux";
+                };
+        };
+};
+

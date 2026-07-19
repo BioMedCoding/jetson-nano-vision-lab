@@ -1,0 +1,14 @@
+# Requirements per il venv Python 3.6 sulla Jetson Nano (JetPack 4.6.1).
+# Tutte le versioni sono le ultime compatibili con Python 3.6 e hanno
+# wheel precompilate per aarch64 su PyPI (niente compilazioni).
+#
+# NON installare da qui: numpy, torch, torchvision (li gestisce setup_jetson.sh
+# nell'ordine giusto) ne' opencv/matplotlib/pandas/seaborn (arrivano dal sistema
+# via --system-site-packages: l'OpenCV pip NON ha GStreamer e romperebbe la camera).
+
+dataclasses; python_version < "3.7"
+typing-extensions==4.1.1
+PyYAML==5.4.1
+tqdm==4.64.1
+requests==2.27.1
+Pillow==8.4.0

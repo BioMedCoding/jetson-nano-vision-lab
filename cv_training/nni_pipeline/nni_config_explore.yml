@@ -1,0 +1,33 @@
+experimentName: cvtrain_explore
+searchSpaceFile: search_space.json
+trialCommand: python trial.py
+trialCodeDirectory: .
+trialConcurrency: 1
+# GPU singola (RTX 5070, 12GB) E RAM piu' stretta della VRAM (14GB usabili
+# su 16GB nominali, verificato con free -h sull'host in sessione): non
+# alzare trialConcurrency nonostante i 20 thread CPU disponibili, FiftyOne +
+# dataloader worker + torch possono superare la RAM libera se due trial
+# costruiscono/allenano in contemporanea.
+# Rete di sicurezza contro un esperimento lasciato incustodito, non un
+# obiettivo: la qualita' guida le decisioni di budget in questo progetto,
+# non il tempo (indicazione esplicita dell'utente -- va bene superare
+# ampiamente questo tetto). Alzalo pure se vuoi lasciarlo girare piu' a
+# lungo; per fermarlo prima basta "nnictl stop" in qualunque momento, i
+# trial completati restano comunque disponibili per Stage A.
+maxExperimentDuration: 48h
+maxTrialNumber: 500
+tuner:
+  name: TPE
+  classArgs:
+    optimize_mode: maximize
+assessor:
+  name: Medianstop
+  classArgs:
+    optimize_mode: maximize
+    # non giudicare prima di 5 epoche riportate: architetture/risoluzioni
+    # diverse convergono a velocita' diverse nelle primissime epoche.
+    start_step: 5
+trainingService:
+  platform: local
+  useActiveGpu: true
+  gpuIndices: "0"

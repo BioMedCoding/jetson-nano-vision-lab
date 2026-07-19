@@ -1,0 +1,37 @@
+diff --git a/kernel/nvidia/include/media/camera_common.h b/kernel/nvidia/include/media/camera_common.h
+index 22a41bc42..e7c750dcf 100644
+--- a/kernel/nvidia/include/media/camera_common.h
++++ b/kernel/nvidia/include/media/camera_common.h
+@@ -286,10 +286,28 @@ static inline void msleep_range(unsigned int delay_base)
+ static inline struct camera_common_data *to_camera_common_data(
+ 	const struct device *dev)
+ {
+-	if (sensor_common_parse_num_modes(dev))
+-		return container_of(dev_get_drvdata(dev),
+-		    struct camera_common_data, subdev);
+-	return NULL;
++	struct camera_common_data *s_data;
++
++	if (!sensor_common_parse_num_modes(dev))
++		return NULL;
++
++	/*
++	 * The DT-only check above passes for any sensor whose node has
++	 * modeN children, even if the bound driver never registered a
++	 * real camera_common_data (e.g. a plain v4l2_subdev driver that
++	 * just leaves its own subdev pointer in the device's drvdata).
++	 * container_of() on that drvdata then reinterprets unrelated
++	 * memory as camera_common_data and callers (e.g.
++	 * tegra_channel_get_sensor_type()) crash dereferencing garbage.
++	 * camera_common_initialize() always sets ->dev to the sensor's
++	 * own device, so use that self-reference as a sanity check.
++	 */
++	s_data = container_of(dev_get_drvdata(dev),
++			    struct camera_common_data, subdev);
++	if (s_data->dev != dev)
++		return NULL;
++
++	return s_data;
+ }
+ 
+ static inline struct camera_common_focuser_data *to_camera_common_focuser_data(

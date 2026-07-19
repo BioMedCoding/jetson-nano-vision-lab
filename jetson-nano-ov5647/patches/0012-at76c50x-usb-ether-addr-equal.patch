@@ -1,0 +1,11 @@
+--- a/kernel/kernel-4.9/drivers/net/wireless/atmel/at76c50x-usb.c
++++ b/kernel/kernel-4.9/drivers/net/wireless/atmel/at76c50x-usb.c
+@@ -1790,7 +1790,7 @@
+ 	 * following workaround is necessary. If the TX frame is an
+ 	 * authentication frame extract the bssid and send the CMD_JOIN. */
+ 	if (mgmt->frame_control & cpu_to_le16(IEEE80211_STYPE_AUTH)) {
+-		if (!ether_addr_equal_64bits(priv->bssid, mgmt->bssid)) {
++		if (!ether_addr_equal(priv->bssid, mgmt->bssid)) {
+ 			memcpy(priv->bssid, mgmt->bssid, ETH_ALEN);
+ 			ieee80211_queue_work(hw, &priv->work_join_bssid);
+ 			dev_kfree_skb_any(skb);

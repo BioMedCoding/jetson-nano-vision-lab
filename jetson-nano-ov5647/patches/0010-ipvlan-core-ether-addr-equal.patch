@@ -1,0 +1,13 @@
+--- a/kernel/kernel-4.9/drivers/net/ipvlan/ipvlan_core.c
++++ b/kernel/kernel-4.9/drivers/net/ipvlan/ipvlan_core.c
+@@ -300,8 +300,8 @@
+ 		if (dev_forward_skb(ipvlan->dev, skb) == NET_RX_SUCCESS)
+ 			success = true;
+ 	} else {
+-		if (!ether_addr_equal_64bits(eth_hdr(skb)->h_dest,
+-					     ipvlan->phy_dev->dev_addr))
++		if (!ether_addr_equal(eth_hdr(skb)->h_dest,
++				       ipvlan->phy_dev->dev_addr))
+ 			skb->pkt_type = PACKET_OTHERHOST;
+ 
+ 		ret = RX_HANDLER_ANOTHER;

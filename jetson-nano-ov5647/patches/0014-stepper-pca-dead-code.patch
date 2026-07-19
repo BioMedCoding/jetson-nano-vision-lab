@@ -1,0 +1,12 @@
+--- a/kernel/kernel-4.9/drivers/staging/stepper/stepper_pca.c
++++ b/kernel/kernel-4.9/drivers/staging/stepper/stepper_pca.c
+@@ -895,9 +895,6 @@
+ 	if (!stepper->stepper_dev)
+ 		return -ENODEV;
+ 
+-	if (!(&stepper->stepper_dev->chardev))
+-		return -ENODEV;
+-
+ 	stepper_reset(client);
+ 
+ 	return 0;
