@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 try:
     import seaborn as sn
-except Exception:  # seaborn/scipy di sistema incompatibili col numpy del venv; serve solo per i plot di training
+except Exception:  # local patch: system seaborn/scipy vs venv numpy; only needed for training plots
     sn = None
 import torch
 from PIL import Image, ImageDraw, ImageFont

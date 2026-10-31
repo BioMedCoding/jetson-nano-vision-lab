@@ -2,6 +2,8 @@
 # Copy the parts of this repo that the Jetson needs (nano/, tools/, the
 # large-file manifest) to $JETSON_HOST:$JETSON_DIR, without the kernel source
 # or the training side. Large files are sent reassembled (not as chunks).
+# Nothing under nano/models/ is ever deleted on the Jetson: models deployed
+# with host/deploy_model.sh (and engines built there) survive a sync.
 #
 # Usage:  host/sync_to_nano.sh [--dry-run]
 # Config: host/jetson.env (see jetson.env.example)
@@ -15,6 +17,7 @@ python3 "$REPO_DIR/tools/largefiles.py" join nano/ >/dev/null
 
 ssh "$JETSON_HOST" "mkdir -p $JETSON_DIR"
 rsync -az --info=stats1 --delete $1 \
+    --filter 'P /nano/models/**' \
     --exclude '.venv/' --exclude '__pycache__/' --exclude '*.part-[0-9][0-9]' \
     --exclude 'build.log' --exclude 'snapshots/' --exclude 'dataset/' \
     "$REPO_DIR/nano" "$REPO_DIR/tools" "$REPO_DIR/largefiles.manifest" \

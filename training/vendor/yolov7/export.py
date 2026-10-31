@@ -10,9 +10,9 @@ import torch
 import torch.nn as nn
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
-# vedi commenti in train.py: PyTorch >=2.6 richiede weights_only=False per i
-# checkpoint yolov7, e NumPy >=2.0 rimuove np.trapz/np.int usati altrove nel
-# repo (patchati qui per coerenza anche se l'export puro non li tocca).
+# Local patch (see train.py): PyTorch >=2.6 needs weights_only=False for
+# yolov7 checkpoints, and NumPy >=2.0 removed np.trapz/np.int used elsewhere
+# in the repo (patched here too for consistency, export alone doesn't need it).
 _torch_load_orig = torch.load
 
 

@@ -1,140 +1,102 @@
-# Training YOLOv5 sull'host → deploy su Jetson Nano
+# training/: fine-tune models on a PC, deploy them to the Nano
 
-Fine-tuning di YOLOv5 sulla RTX 5070 di questo PC e deploy del modello sulla
-Nano. Il percorso di deploy consigliato è **ONNX → TensorRT**: il PyTorch
-moderno dell'host e il torch 1.10 della Nano non sono compatibili a livello di
-checkpoint, ma l'ONNX li disaccoppia completamente.
+The Nano can run models but cannot train them in any reasonable time. This
+part runs on a PC with a GPU: it fine-tunes YOLO detectors on your data and
+packages each result as a **model folder** that the Nano picks up as is
+(the [model contract](../docs/model-contract.md)).
 
-Questo file è il quick-start (setup → `run_pipeline.sh` → deploy). Per una
-guida più a fondo — come allenare bene (hyperparametri, freeze, lettura dei
-risultati, overfitting) e dove trovare dataset gratuiti più grandi/migliori
-di COCO per le classi che mancano — vedi
-[`GUIDA_TRAINING_DATASET.md`](GUIDA_TRAINING_DATASET.md).
+```
+your dataset ──► quickstart.py ──► export/<name>/ ──► host/deploy_model.sh ──► Nano
+                 (or the NNI search)  model.onnx       copies it, builds the
+                                      model.json       TensorRT engine ON the
+                                      labels.txt       Nano, smoke-tests it
+```
 
-## 0. Setup (una tantum)
+ONNX is the only thing that travels: the Nano's torch 1.10 / Python 3.6
+cannot load checkpoints saved by modern PyTorch, and a TensorRT engine can
+only be built on the device that will run it.
+
+## Setup (once)
+
+Needs Linux x86_64 with [uv](https://docs.astral.sh/uv/) installed. A CUDA
+GPU is strongly recommended; tested on an RTX 5070.
 
 ```bash
-cd ~/jetson_work/cv_training && chmod +x setup_host.sh && ./setup_host.sh
-source .venv/bin/activate
+training/setup/setup_host.sh          # creates training/.venv
+source training/.venv/bin/activate
 ```
 
-## Percorso rapido: run_pipeline.sh
+`setup_host.sh --torch-backend auto` (the default) lets uv pick the PyTorch
+build that matches your NVIDIA driver; `--torch-backend cu128` forces the
+exact combination this repo was verified with; `cpu` works without a GPU
+(slowly). Everything else is pinned in `setup/requirements.lock`.
 
-I passi §1-4 sotto restano la spiegazione di dettaglio (utile per debug
-manuale), ma una volta che il dataset è pronto (§1) l'intera pipeline
-training→export→deploy si lancia con un solo comando:
+## Quickstart: one model on your dataset
 
 ```bash
-./run_pipeline.sh dataset/ yolov5n.pt                                 # stampa i comandi scp
-./run_pipeline.sh dataset/ yolov5s.pt --img 416 --epochs 150 --name volpe
-./run_pipeline.sh dataset/ yolov5n.pt --deploy matteo@10.42.0.24       # fa anche lo scp
+cd training
+python quickstart.py --data /path/to/dataset/data.yaml                  # yolov5n, 416
+python quickstart.py --data /path/to/data.yaml --arch yolov8n --name fox-v1 --deploy
 ```
 
-Valida la struttura del dataset (cartelle, `data.yaml`, coerenza tra il numero
-di classi dichiarate e il class-id massimo usato nelle label — l'errore più
-comune e più silenzioso se non controllato) **prima** di lanciare ore di
-training, poi allena, esporta ONNX alla stessa risoluzione del training
-(evita il classico mismatch train/inferenza) e genera `classes.txt` da
-`data.yaml`. Con `--deploy` fa anche lo scp sulla Jetson; senza, stampa i
-comandi pronti da eseguire.
+It validates the dataset (the classic silent mistake: a class id in the
+labels higher than the number of classes in `data.yaml`), trains with early
+stopping, exports ONNX **at the training size**, checks the ONNX against the
+decoder the Nano will use, and writes `export/<name>/`. With `--deploy` it
+also runs `host/deploy_model.sh`.
 
-## 1. Dataset
+| `--arch` | Nano fps (live, 416) | Notes |
+|---|---|---|
+| `yolov5n` | ~30 | fastest; the default |
+| `yolov7-tiny` | ~23 | more accurate than v5n, nearly as fast |
+| `yolov8n` | ~22 | anchor-free head (`yolo_v8` decoder) |
+| `yolov5s` | ~20 | more accurate, 2/3 of the fps |
 
-Raccogli le immagini sulla Nano con `~/cv_projects/05_dataset_capture/` e
-copiale qui (scp dalla Jetson o direttamente dalla microSD). Struttura YOLO:
+Train at the size you will run at: `--img 416` (default) matches the Nano
+models. Starting weights are the COCO-pretrained ones in `weights/`.
+
+### Dataset format
+
+Standard YOLO layout, e.g. from Roboflow ("YOLOv5 PyTorch" export), CVAT or
+labelImg:
 
 ```
-dataset/
-├── images/train/   *.jpg
-├── images/val/     *.jpg  (10-20% delle immagini)
-├── labels/train/   *.txt  (una riga per box: class x_c y_c w h, normalizzati)
-└── labels/val/     *.txt
+mydata/
+├── data.yaml          names: {0: fox, 1: cat}   (train/val paths optional)
+├── images/train/  *.jpg     images/val/  *.jpg  (10-20% of the images)
+└── labels/train/  *.txt     labels/val/  *.txt  (class x_c y_c w h, normalized)
 ```
 
-Per etichettare: [labelImg](https://github.com/HumanSignal/labelImg) in
-formato YOLO, oppure Roboflow/CVAT (esportano già così).
+Collect images with the camera itself (`nano/apps/capture_dataset.py`, native
+640x480): a model fine-tuned on frames from the real camera and scene beats
+one trained only on internet images. See
+[docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md) for how to train well
+(dataset size, epochs, freezing, reading the results) and where to find free
+datasets.
 
-Crea `dataset/data.yaml`:
+## The NNI search (optional, heavy)
 
-```yaml
-path: /home/matteo/jetson_work/cv_training/dataset
-train: images/train
-val: images/val
-names:
-  0: classe_a
-  1: classe_b
-```
+`nni/` runs a [Microsoft NNI](https://github.com/microsoft/nni)
+hyperparameter search over architecture x public dataset (Open Images V7,
+Sama-COCO via FiftyOne) x augmentation/optimizer settings, then "promotes"
+the best trial to a long training. It downloads tens of thousands of images
+and runs for days: see [nni/README.md](nni/README.md). `./menu.sh` drives
+everything from a text menu.
 
-## 2. Training
+## Layout
 
-Parti sempre da `yolov5n` (o `yolov5s`): sono gli unici sensati per la Nano.
+| Path | What |
+|---|---|
+| `quickstart.py` | one dataset, one architecture -> model folder |
+| `cvtrain/` | shared code: trainers (yolov5 / yolov7 / yolov8), export, packaging, dataset builder |
+| `nni/` | NNI search: `trial.py` (Stage A), `promote.py` (Stage B), configs, class map |
+| `menu.sh`, `menu.py` | text menu over all of the above |
+| `setup/` | `setup_host.sh`, `requirements.lock`, `overrides.txt` |
+| `weights/` | COCO-pretrained starting weights (vendored: download links rot) |
+| `vendor/` | patched yolov5 and yolov7 (see each `VENDORED.md`) |
+| `tests/test_trainers.py` | trains, exports and packages all 4 architectures on coco128 |
+| `datasets/`, `runs/`, `export/` | created as you work; git-ignored |
 
-```bash
-cd yolov5
-python train.py --img 416 --batch 64 --epochs 100 \
-    --data ../dataset/data.yaml --weights yolov5n.pt --name ov5647_run
-# risultati in runs/train/ov5647_run/  (best.pt, curve, matrici di confusione)
-```
-
-Consigli per la 5070 (12 GB): `--img 416 --batch 64` per yolov5n; se la VRAM
-avanza, alza il batch. `--img 416` combacia con la risoluzione di inferenza
-sulla Nano: allena e inferisci alla stessa scala.
-
-## 3. Export per la Jetson
-
-```bash
-python export.py --weights runs/train/ov5647_run/weights/best.pt \
-    --include onnx --imgsz 416 416 --opset 12 --simplify
-```
-
-`--opset 12` è il massimo digeribile da TensorRT 8.2 su JetPack 4.6.
-L'output `best.onnx` ha lo stesso formato (1, N, 5+num_classi) che gli script
-della Nano si aspettano.
-
-## 4. Deploy sulla Nano
-
-```bash
-# dall'host (Jetson accesa in rete) oppure copiando sulla microSD:
-scp runs/train/ov5647_run/weights/best.onnx matteo@<ip-jetson>:~/cv_projects/models/custom.onnx
-
-# sulla Jetson:
-cd ~/cv_projects/03_tensorrt
-./build_engine.sh ../models/custom.onnx 416
-python trt_detect.py --engine ../models/custom_416_fp16.engine --names ../models/classes.txt
-```
-
-`classes.txt`: un nome di classe per riga, stesso ordine di `data.yaml`.
-
-## Pesi di partenza e dataset più aggiornati
-
-I pesi vendorizzati (`yolov5n.pt`/`yolov5s.pt`) sono la release **v6.0**
-(2021, pre-addestrata su COCO 2017): è la coppia peso/architettura con cui
-`postprocess()` nella Nano è stata verificata, percorso a costo-decoder zero.
-
-- **YOLOv5 v7.0 "u" (ultralytics, anchor-free)**: pesi pretrained più
-  accurati a parità di dimensione. **Attenzione**: la testa "u" è imparentata
-  con quella di YOLOv8 (vedi `cv/README.md` del progetto principale) — non è
-  garantito che l'export ONNX resti nel formato `(1, N, 85)` che
-  `postprocess()` si aspetta. Usarla è un compito di verifica-decoder (shape
-  reale dell'ONNX, eventuale `postprocess_v8`), non un drop-in gratuito. Se
-  vuoi restare a costo zero, allena da v6.0.
-- **Dataset più recenti di COCO 2017**: [Roboflow
-  Universe](https://universe.roboflow.com/) ha migliaia di dataset
-  YOLO-ready recenti, spesso specifici per scenario (angolazione, distanza,
-  condizioni di luce) — questo è il vantaggio reale, non il semplice "essere
-  più nuovi": un mirror Roboflow di puro COCO non aggiunge nulla ai pesi COCO
-  2017 già in uso. Cerca dataset con inquadratura simile a questa camera CSI
-  (fissa, dall'alto/frontale), esporta in formato "YOLOv5 PyTorch" (produce
-  già la struttura `images/labels/data.yaml` di §1) e unisci alle immagini
-  catturate con `05_dataset_capture` per adattare il modello alla scena reale
-  — il fine-tuning locale conta più della fonte del dataset base.
-
-## Note
-
-- **Non** copiare il `.pt` addestrato qui dentro il flusso PyTorch della Nano
-  (`live_detect.py`): il torch 1.10/py3.6 della Jetson non carica checkpoint
-  salvati da torch moderni. Usa sempre il percorso ONNX → TensorRT.
-- Se ti serve provare il modello sull'host con la webcam/immagini:
-  `python detect.py --weights runs/train/.../best.pt --source 0` (nel venv host).
-- La cartella `dataset/` e `runs/` possono crescere molto: sono escluse dal
-  deploy, sulla Nano viaggia solo l'ONNX.
+Environment variables: `CVTRAIN_DEVICE` (`0`, `1`, `cpu`, ...; default: first
+GPU, else CPU) and `CVTRAIN_BATCH` (batch size, if the default table in
+`cvtrain/hparams.py`, tuned for 12 GB, is too much for your GPU).

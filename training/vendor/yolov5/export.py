@@ -60,7 +60,7 @@ import pandas as pd
 import torch
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
-# vedi commento in train.py: shim per import ultralytics con filelock<3.12
+# Local patch (see train.py): filelock<3.12 shim so ultralytics imports.
 import filelock
 
 if not hasattr(filelock, "AsyncFileLock"):

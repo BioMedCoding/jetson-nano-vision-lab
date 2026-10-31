@@ -38,12 +38,11 @@ import yaml
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-# nni_pipeline fissa filelock<3.12 (nnictl va in deadlock con versioni piu'
-# recenti -- vedi nni_pipeline/common/compat.py), ma questo repo importa
-# ultralytics.data.converter (via utils/general.py) che richiede
-# filelock.AsyncFileLock (aggiunto dopo 3.12). Shim minimo: basta che il
-# nome esista, il percorso async-lock-protetto non viene mai esercitato da
-# questa pipeline.
+# Local patch: the training setup pins filelock<3.12 (nnictl deadlocks with
+# newer versions, see training/cvtrain/compat.py), but this repo imports
+# ultralytics.data.converter (via utils/general.py), which needs
+# filelock.AsyncFileLock (added after 3.12). Minimal shim: the name only has
+# to exist; the async-locked code path is never used by this pipeline.
 import filelock
 
 if not hasattr(filelock, "AsyncFileLock"):

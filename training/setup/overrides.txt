@@ -1,0 +1,7 @@
+# Deliberate override of a declared dependency, applied with `uv pip install --override`.
+#
+# NNI 3.0's nnictl deadlocks silently with filelock >= 3.12, but ultralytics
+# declares filelock >= 3.16.1 only for an import (AsyncFileLock) that
+# cvtrain/compat.py shims. So filelock stays below 3.12 against ultralytics'
+# metadata. Details: cvtrain/compat.py.
+filelock==3.11.0

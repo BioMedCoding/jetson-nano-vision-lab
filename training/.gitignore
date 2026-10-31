@@ -3,25 +3,20 @@
 __pycache__/
 *.pyc
 
-# Training outputs: weights/exports produced by runs are regenerable.
-# The pretrained STARTING weights in weights/ are vendored on purpose
-# (release download links rot), so they are re-included below.
+# Training outputs: regenerable. The pretrained STARTING weights in
+# weights/ are vendored on purpose (release download links rot), so they
+# are re-included below.
 *.pt
 *.onnx
 *.engine
 *.pth
 !weights/*.pt
-
-# Datasets and runs: large and regenerable
-# (dataset_builder.py caches by config hash; runs/ is written by trial.py/promote.py)
-nni_pipeline/dataset_cache/
-nni_pipeline/dataset_cache_smoke/
-nni_pipeline/runs/
+runs/
+export/
 vendor/yolov5/runs/
 vendor/yolov7/runs/
-quickstart/runs/
 *.cache
 
-# Your own captured/labelled dataset: real images, not code
-local_capture_dataset/
+# Datasets: large and yours (datasets/cache is rebuilt by the NNI pipeline,
+# datasets/local_capture holds your labelled Nano captures)
 datasets/

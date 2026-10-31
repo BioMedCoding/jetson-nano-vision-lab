@@ -1,15 +1,12 @@
 #!/bin/bash
-# Punto di ingresso unico per la pipeline di training: attiva il venv (se
-# esiste) e lancia il menu testuale. Se il venv non esiste ancora, il menu
-# stesso offre di eseguire setup_host.sh come prima voce.
+# Single entry point for the training side: activates the venv (if it exists)
+# and starts the text menu. Without a venv, the menu's first entry runs the setup.
 set -e
 cd "$(dirname "$0")"
-
 if [ -f .venv/bin/activate ]; then
-    source .venv/bin/activate
+    . .venv/bin/activate
 else
-    echo "Nota: .venv non trovato -- uso il python di sistema solo per mostrare"
-    echo "il menu; scegli 'Setup ambiente' come prima voce."
+    echo "Note: no .venv yet -- using the system python just for the menu;"
+    echo "choose 'Set up the environment' first."
 fi
-
-python3 nni_pipeline/menu.py
+exec python3 menu.py

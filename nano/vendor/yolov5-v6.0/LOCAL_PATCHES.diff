@@ -1,0 +1,14 @@
+--- a/utils/plots.py
++++ b/utils/plots.py
+@@ -13,7 +13,10 @@
+ import matplotlib.pyplot as plt
+ import numpy as np
+ import pandas as pd
+-import seaborn as sn
++try:
++    import seaborn as sn
++except Exception:  # local patch: system seaborn/scipy vs venv numpy; only needed for training plots
++    sn = None
+ import torch
+ from PIL import Image, ImageDraw, ImageFont
+ 

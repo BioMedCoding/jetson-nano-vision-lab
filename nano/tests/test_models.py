@@ -6,9 +6,9 @@ images. Runs ON the Nano, no camera needed (the dashboard can stay running).
     python3 tests/test_models.py            # every model with an engine
     python3 tests/test_models.py yolov8n-416
 
-A COCO model must find the bus and at least 2 people in bus.jpg and at least
-2 people in zidane.jpg. Models with other labels are only checked to load
-and run.
+A model with the 80 COCO classes must find the bus and at least 2 people in
+bus.jpg and at least 2 people in zidane.jpg. Models with other classes are
+only checked to load and run.
 """
 import os
 import sys
@@ -21,7 +21,7 @@ import cv2  # noqa: E402
 
 from jetson_cv import YOLOV5_DIR  # noqa: E402
 from jetson_cv.inference.detector import Detector  # noqa: E402
-from jetson_cv.labels import class_name  # noqa: E402
+from jetson_cv.labels import COCO80, class_name  # noqa: E402
 from jetson_cv.models import list_models, resolve  # noqa: E402
 
 IMAGES = os.path.join(YOLOV5_DIR, "data", "images")
@@ -42,7 +42,7 @@ def main():
     failures = 0
     for info in infos:
         det = Detector(info)
-        coco = info.labels_spec == "coco80"
+        coco = det.names == COCO80  # built-in or a labels.txt with the COCO names
         line, ok = [], True
         for img_name, img in images.items():
             dets, ms = det.detect(img, conf=0.4, iou=0.45)

@@ -1,0 +1,76 @@
+--- a/export.py
++++ b/export.py
+@@ -5,10 +5,28 @@
+ 
+ sys.path.append('./')  # to run '$ python *.py' files in subdirectories
+ 
++import numpy as np
+ import torch
+ import torch.nn as nn
+ from torch.utils.mobile_optimizer import optimize_for_mobile
+ 
++# Local patch (see train.py): PyTorch >=2.6 needs weights_only=False for
++# yolov7 checkpoints, and NumPy >=2.0 removed np.trapz/np.int used elsewhere
++# in the repo (patched here too for consistency, export alone doesn't need it).
++_torch_load_orig = torch.load
++
++
++def _torch_load_patched(*args, **kwargs):
++    kwargs.setdefault("weights_only", False)
++    return _torch_load_orig(*args, **kwargs)
++
++
++torch.load = _torch_load_patched
++if not hasattr(np, "trapz"):
++    np.trapz = np.trapezoid
++if not hasattr(np, "int"):
++    np.int = int
++
+ import models
+ from models.experimental import attempt_load, End2End
+ from utils.activations import Hardswish, SiLU
+--- a/train.py
++++ b/train.py
+@@ -16,6 +16,29 @@
+ import torch.optim.lr_scheduler as lr_scheduler
+ import torch.utils.data
+ import yaml
++
++# Local patch: PyTorch >=2.6 defaults torch.load(weights_only=True), which breaks loading
++# yolov7's full-object checkpoints (pickled models.yolo.Model, not a plain
++# state_dict) -- this repo predates that default and is unmaintained
++# upstream. Patched here rather than per call-site since torch.load is
++# invoked the same way from models/experimental.py and utils/*.py within
++# this same process.
++_torch_load_orig = torch.load
++
++
++def _torch_load_patched(*args, **kwargs):
++    kwargs.setdefault("weights_only", False)
++    return _torch_load_orig(*args, **kwargs)
++
++
++torch.load = _torch_load_patched
++
++# NumPy >=2.0 removed np.trapz (renamed np.trapezoid) and the np.int alias
++# (used by utils/metrics.py and utils/datasets.py in this old repo).
++if not hasattr(np, "trapz"):
++    np.trapz = np.trapezoid
++if not hasattr(np, "int"):
++    np.int = int
+ from torch.cuda import amp
+ from torch.nn.parallel import DistributedDataParallel as DDP
+ from torch.utils.tensorboard import SummaryWriter
+--- a/utils/google_utils.py
++++ b/utils/google_utils.py
+@@ -18,7 +18,9 @@
+ 
+ def attempt_download(file, repo='WongKinYiu/yolov7'):
+     # Attempt file download if does not exist
+-    file = Path(str(file).strip().replace("'", '').lower())
++    # Local patch: upstream lowercased the whole path here, so weights under
++    # any directory with a capital letter were "missing" and re-downloaded.
++    file = Path(str(file).strip().replace("'", ''))
+ 
+     if not file.exists():
+         try:

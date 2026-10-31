@@ -1,0 +1,29 @@
+experimentName: cvtrain_explore
+searchSpaceFile: search_space.json
+trialCommand: python trial.py
+trialCodeDirectory: .
+trialConcurrency: 1
+# One GPU (12 GB) and less free RAM than VRAM (14 GB usable): keep one
+# trial at a time even with many CPU threads; FiftyOne + dataloader workers
+# + torch can exceed free RAM when two trials build/train concurrently.
+# Safety net against an unattended experiment, not a target: model quality
+# drives the budget, not time. Raise it freely; `nnictl stop` ends it
+# early at any time and finished trials stay usable for Stage B.
+maxExperimentDuration: 48h
+maxTrialNumber: 500
+tuner:
+  name: TPE
+  classArgs:
+    optimize_mode: maximize
+assessor:
+  name: Medianstop
+  classArgs:
+    optimize_mode: maximize
+    # don't judge before 5 reported epochs: architectures and resolutions
+    # converge at different speeds in the very first epochs.
+    start_step: 5
+# NNI needs a CUDA GPU here; on a CPU-only machine use quickstart.py instead.
+trainingService:
+  platform: local
+  useActiveGpu: true
+  gpuIndices: "0"

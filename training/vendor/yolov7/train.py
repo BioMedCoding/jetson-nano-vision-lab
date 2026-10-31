@@ -17,7 +17,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
 
-# PyTorch >=2.6 defaults torch.load(weights_only=True), which breaks loading
+# Local patch: PyTorch >=2.6 defaults torch.load(weights_only=True), which breaks loading
 # yolov7's full-object checkpoints (pickled models.yolo.Model, not a plain
 # state_dict) -- this repo predates that default and is unmaintained
 # upstream. Patched here rather than per call-site since torch.load is
@@ -33,8 +33,8 @@ def _torch_load_patched(*args, **kwargs):
 
 torch.load = _torch_load_patched
 
-# NumPy >=2.0 rimuove np.trapz (rinominato np.trapezoid) e l'alias np.int
-# (usati da utils/metrics.py e utils/datasets.py in questo repo datato).
+# NumPy >=2.0 removed np.trapz (renamed np.trapezoid) and the np.int alias
+# (used by utils/metrics.py and utils/datasets.py in this old repo).
 if not hasattr(np, "trapz"):
     np.trapz = np.trapezoid
 if not hasattr(np, "int"):

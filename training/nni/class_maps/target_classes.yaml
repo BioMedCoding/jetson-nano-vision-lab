@@ -1,0 +1,281 @@
+# Canonical class list for fine-tuning, plus a source-name -> canonical-id
+# map for every dataset the builder (cvtrain/dataset_builder.py) supports.
+#
+# The 80 canonical classes are the official COCO-2017 ones, in the same id
+# order as yolov5's data/coco.yaml. The pretrained weights are trained on
+# exactly this scheme, so fine-tuning starts with an advantage: most classes
+# already have a sensible representation and training only specializes them
+# to the real camera scene instead of learning them from scratch.
+#
+# Why these 80 and no more: the value of fine-tuning here is not covering
+# more classes but being more accurate on the real scene (a person was seen
+# being taken for a cat), so staying on COCO's native classes maximizes both
+# useful coverage and transfer-learning quality. Indoor home + garden/street
+# scenes, no wildlife.
+#
+# Sources (mappings checked programmatically, not assumed):
+#   - Sama-COCO: EXACT 1:1 match with all 80 COCO names (same images).
+#   - Open Images V7: 601 classes with its own naming, often different from
+#     COCO ("tv" -> "Television", "cow" -> "Cattle"). 78/80 classes mapped to
+#     a reasonable equivalent checked against
+#     fiftyone.utils.openimages.get_classes(); frisbee and cup have no direct
+#     enough OIV7 equivalent, so they come from samacoco only (a source
+#     without a mapping for a class simply drops that class).
+#
+# To add or remove classes: edit canonical_classes and both source maps
+# consistently; a canonical class missing from a source is dropped from it.
+
+canonical_classes:
+  0: person
+  1: bicycle
+  2: car
+  3: motorcycle
+  4: airplane
+  5: bus
+  6: train
+  7: truck
+  8: boat
+  9: traffic_light
+  10: fire_hydrant
+  11: stop_sign
+  12: parking_meter
+  13: bench
+  14: bird
+  15: cat
+  16: dog
+  17: horse
+  18: sheep
+  19: cow
+  20: elephant
+  21: bear
+  22: zebra
+  23: giraffe
+  24: backpack
+  25: umbrella
+  26: handbag
+  27: tie
+  28: suitcase
+  29: frisbee
+  30: skis
+  31: snowboard
+  32: sports_ball
+  33: kite
+  34: baseball_bat
+  35: baseball_glove
+  36: skateboard
+  37: surfboard
+  38: tennis_racket
+  39: bottle
+  40: wine_glass
+  41: cup
+  42: fork
+  43: knife
+  44: spoon
+  45: bowl
+  46: banana
+  47: apple
+  48: sandwich
+  49: orange
+  50: broccoli
+  51: carrot
+  52: hot_dog
+  53: pizza
+  54: donut
+  55: cake
+  56: chair
+  57: couch
+  58: potted_plant
+  59: bed
+  60: dining_table
+  61: toilet
+  62: tv
+  63: laptop
+  64: mouse
+  65: remote
+  66: keyboard
+  67: cell_phone
+  68: microwave
+  69: oven
+  70: toaster
+  71: sink
+  72: refrigerator
+  73: book
+  74: clock
+  75: vase
+  76: scissors
+  77: teddy_bear
+  78: hair_drier
+  79: toothbrush
+
+sources:
+  oiv7:  # Open Images V7 name -> canonical id (checked; 78/80: no direct match for frisbee and cup)
+    "Person": 0
+    "Bicycle": 1
+    "Car": 2
+    "Motorcycle": 3
+    "Airplane": 4
+    "Bus": 5
+    "Train": 6
+    "Truck": 7
+    "Boat": 8
+    "Traffic light": 9
+    "Fire hydrant": 10
+    "Stop sign": 11
+    "Parking meter": 12
+    "Bench": 13
+    "Bird": 14
+    "Cat": 15
+    "Dog": 16
+    "Horse": 17
+    "Sheep": 18
+    "Cattle": 19
+    "Elephant": 20
+    "Bear": 21
+    "Zebra": 22
+    "Giraffe": 23
+    "Backpack": 24
+    "Umbrella": 25
+    "Handbag": 26
+    "Tie": 27
+    "Suitcase": 28
+    "Ski": 30
+    "Snowboard": 31
+    "Ball": 32
+    "Kite": 33
+    "Baseball bat": 34
+    "Baseball glove": 35
+    "Skateboard": 36
+    "Surfboard": 37
+    "Tennis racket": 38
+    "Bottle": 39
+    "Wine glass": 40
+    "Fork": 42
+    "Knife": 43
+    "Spoon": 44
+    "Bowl": 45
+    "Banana": 46
+    "Apple": 47
+    "Sandwich": 48
+    "Orange": 49
+    "Broccoli": 50
+    "Carrot": 51
+    "Hot dog": 52
+    "Pizza": 53
+    "Doughnut": 54
+    "Cake": 55
+    "Chair": 56
+    "Couch": 57
+    "Houseplant": 58
+    "Bed": 59
+    "Kitchen & dining room table": 60
+    "Toilet": 61
+    "Television": 62
+    "Laptop": 63
+    "Mouse": 64
+    "Remote control": 65
+    "Computer keyboard": 66
+    "Mobile phone": 67
+    "Microwave oven": 68
+    "Oven": 69
+    "Toaster": 70
+    "Sink": 71
+    "Refrigerator": 72
+    "Book": 73
+    "Clock": 74
+    "Vase": 75
+    "Scissors": 76
+    "Teddy bear": 77
+    "Hair dryer": 78
+    "Toothbrush": 79
+
+  samacoco:  # Sama-COCO name -> canonical id (exact 1:1 match with COCO-80, checked)
+    person: 0
+    bicycle: 1
+    car: 2
+    motorcycle: 3
+    airplane: 4
+    bus: 5
+    train: 6
+    truck: 7
+    boat: 8
+    traffic light: 9
+    fire hydrant: 10
+    stop sign: 11
+    parking meter: 12
+    bench: 13
+    bird: 14
+    cat: 15
+    dog: 16
+    horse: 17
+    sheep: 18
+    cow: 19
+    elephant: 20
+    bear: 21
+    zebra: 22
+    giraffe: 23
+    backpack: 24
+    umbrella: 25
+    handbag: 26
+    tie: 27
+    suitcase: 28
+    frisbee: 29
+    skis: 30
+    snowboard: 31
+    sports ball: 32
+    kite: 33
+    baseball bat: 34
+    baseball glove: 35
+    skateboard: 36
+    surfboard: 37
+    tennis racket: 38
+    bottle: 39
+    wine glass: 40
+    cup: 41
+    fork: 42
+    knife: 43
+    spoon: 44
+    bowl: 45
+    banana: 46
+    apple: 47
+    sandwich: 48
+    orange: 49
+    broccoli: 50
+    carrot: 51
+    hot dog: 52
+    pizza: 53
+    donut: 54
+    cake: 55
+    chair: 56
+    couch: 57
+    potted plant: 58
+    bed: 59
+    dining table: 60
+    toilet: 61
+    tv: 62
+    laptop: 63
+    mouse: 64
+    remote: 65
+    keyboard: 66
+    cell phone: 67
+    microwave: 68
+    oven: 69
+    toaster: 70
+    sink: 71
+    refrigerator: 72
+    book: 73
+    clock: 74
+    vase: 75
+    scissors: 76
+    teddy bear: 77
+    hair drier: 78
+    toothbrush: 79
+
+  local_capture:  # STUB: fill in once your Nano captures are labelled.
+    # With 80 canonical classes it makes no sense to guess your label names
+    # here: label with whatever names you like for the classes actually in
+    # your scene (labelImg/CVAT), then add one line per name used,
+    # "label_name: <canonical_id>". For example:
+    #   person: 0
+    #   car: 2
+    #   cat: 15
+    #   dog: 16

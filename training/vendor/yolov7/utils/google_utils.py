@@ -18,7 +18,9 @@ def gsutil_getsize(url=''):
 
 def attempt_download(file, repo='WongKinYiu/yolov7'):
     # Attempt file download if does not exist
-    file = Path(str(file).strip().replace("'", '').lower())
+    # Local patch: upstream lowercased the whole path here, so weights under
+    # any directory with a capital letter were "missing" and re-downloaded.
+    file = Path(str(file).strip().replace("'", ''))
 
     if not file.exists():
         try:
