@@ -1,8 +1,21 @@
-# Repo unificata: jetson-nano-ov5647/ e cv_training/ hanno gia' un proprio
-# .gitignore (git li rispetta a qualunque profondita', non serve unirli qui
-# dentro) -- questo file copre solo cruft che potrebbe finire alla radice.
+# Each part (camera/, nano/, training/) has its own .gitignore for its
+# specific build products. This file only covers repo-wide cruft.
 .DS_Store
 *~
 .venv/
+venv/
 __pycache__/
 *.pyc
+
+# Local, per-user configuration (see host/jetson.env.example)
+host/jetson.env
+
+# Large files are stored in git as verified chunks (see tools/largefiles.py);
+# the reassembled originals are build products and never committed.
+*.joined
+
+# >>> largefiles (managed by tools/largefiles.py, do not edit)
+/nano/models/yolov5l.onnx
+/nano/models/yolov5l_416_fp16.engine
+/nano/vendor/wheels/torch-1.10.0a0+git36449ea-cp36-cp36m-linux_aarch64.whl
+# <<< largefiles
