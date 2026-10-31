@@ -1,181 +1,138 @@
 #!/bin/bash
-# Setup completo dell'ambiente YOLOv5 sulla Jetson Nano (JetPack 4.6.1, Ubuntu 18.04).
-# Da eseguire SULLA JETSON:   cd ~/cv_projects/setup && ./setup_jetson.sh
+# One-shot setup of the Python environment on the Jetson Nano.
+# Run ON the Jetson, from anywhere:   nano/setup/setup_jetson.sh
 #
-# Cosa fa:
-#   1. installa i pacchetti apt necessari (incluse le librerie python "pesanti"
-#      che il venv erediterà: matplotlib/pandas/seaborn, mai da compilare)
-#   2. crea swap da 4 GB se assente (serve per eventuali compilazioni)
-#   3. crea il venv Python 3.6 con --system-site-packages in ~/cv_projects/venv
-#   4. installa numpy -> torch (wheel NVIDIA) -> torchvision (wheel Qengineering)
-#   5. installa i requirements pip e verifica tutto
+# Target: JetPack 4.6.1 (L4T R32.7.1, Ubuntu 18.04, Python 3.6), the last
+# JetPack for the original Nano. Everything Python comes from this repo
+# (nano/vendor/wheels, pinned by nano/setup/requirements.lock): no PyPI, no
+# NVIDIA download links, no compilation.
 #
-# Opzioni:
-#   --trt       installa anche onnx+pycuda per la pipeline TensorRT (pycuda
-#               compila da sorgente: ~15 minuti in piu')
-#   --no-swap   non creare lo swapfile
+# What it does:
+#   1. apt: the few system libraries the torch wheel links against (skip with --no-apt)
+#   2. reassembles the large vendored files (torch wheel) from their chunks
+#   3. creates nano/.venv: Python 3.6 with --system-site-packages, because
+#      OpenCV (cv2) and TensorRT exist only as JetPack system packages
+#   4. installs every pip package offline from nano/vendor/wheels
+#   5. installs jetson-stats (jtop) system-wide if missing (dashboard System tab)
+#   6. verifies the result
+#
+# Options:
+#   --no-apt    skip step 1 (offline machine that already has the packages)
+#   --swap      also create a 4 GB /swapfile (only useful for heavy builds)
 set -e
 
-BASE="$(cd "$(dirname "$0")/.." && pwd)"
-VENV="$BASE/venv"
-WHEELS="$BASE/setup/wheels"
-WANT_TRT=0; WANT_SWAP=1
+NANO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="$(cd "$NANO_DIR/.." && pwd)"
+VENV="$NANO_DIR/.venv"
+WHEELS="$NANO_DIR/vendor/wheels"
+WANT_APT=1; WANT_SWAP=0
 for a in "$@"; do
     case "$a" in
-        --trt) WANT_TRT=1 ;;
-        --no-swap) WANT_SWAP=0 ;;
+        --no-apt) WANT_APT=0 ;;
+        --swap) WANT_SWAP=1 ;;
+        -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+        *) echo "Unknown option: $a"; exit 1 ;;
     esac
 done
 
 if [ ! -f /etc/nv_tegra_release ]; then
-    echo "ERRORE: questo script va eseguito sulla Jetson Nano, non sull'host."
-    exit 1
+    echo "ERROR: run this on the Jetson Nano, not on your PC."; exit 1
+fi
+if ! grep -q "R32 (release), REVISION: 7" /etc/nv_tegra_release; then
+    echo "WARNING: this was built and tested on L4T R32.7.x (JetPack 4.6.x). Found:"
+    head -1 /etc/nv_tegra_release
+    echo "The vendored wheels and TensorRT engines may not work. Continuing in 5 s..."
+    sleep 5
 fi
 
-echo "==== [1/7] Pacchetti di sistema (apt) ===="
-sudo apt-get update
-sudo apt-get install -y \
-    python3-venv python3-dev python3-pip \
-    libopenblas-base libopenmpi-dev libomp-dev \
-    libjpeg-dev zlib1g-dev \
-    python3-matplotlib python3-pandas python3-seaborn python3-pil
-
-if [ "$WANT_SWAP" = 1 ]; then
-    echo "==== [2/7] Swap ===="
-    SWAP_KB=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
-    if [ "$SWAP_KB" -lt 3800000 ]; then
-        if [ ! -f /swapfile ]; then
-            echo "Creo /swapfile da 4 GB..."
-            sudo fallocate -l 4G /swapfile
-            sudo chmod 600 /swapfile
-            sudo mkswap /swapfile
-            sudo swapon /swapfile
-            grep -q '^/swapfile' /etc/fstab || \
-                echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-        else
-            sudo swapon /swapfile 2>/dev/null || true
-        fi
-    else
-        echo "Swap gia' sufficiente."
-    fi
+echo "==== [1/6] System packages (apt) ===="
+if [ "$WANT_APT" = 1 ]; then
+    sudo apt-get update
+    sudo apt-get install -y python3-venv python3-pip \
+        libopenblas-base libopenmpi-dev libomp-dev
 else
-    echo "==== [2/7] Swap: saltato (--no-swap) ===="
+    echo "Skipped (--no-apt)."
+fi
+if [ "$WANT_SWAP" = 1 ] && [ ! -f /swapfile ]; then
+    echo "Creating a 4 GB /swapfile..."
+    sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+    sudo mkswap /swapfile && sudo swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 fi
 
-echo "==== [3/7] Virtualenv Python 3.6 ===="
-# --system-site-packages e' FONDAMENTALE: fa ereditare al venv l'OpenCV di
-# sistema (compilato con GStreamer per la camera CSI), tensorrt e le librerie
-# apt. Il vecchio venv 'jetson_yolo' falliva perche' era Python 3.8: su
-# JetPack 4 torch CUDA e cv2 esistono solo per Python 3.6.
+echo "==== [2/6] Reassembling large vendored files ===="
+python3 "$REPO_DIR/tools/largefiles.py" join nano/
+
+echo "==== [3/6] Virtual environment (Python 3.6, system site packages) ===="
 if [ ! -f "$VENV/bin/activate" ]; then
     python3.6 -m venv --system-site-packages "$VENV"
 fi
-# workaround "Illegal instruction" di numpy/OpenBLAS su Nano: sempre attivo nel venv
-grep -q OPENBLAS_CORETYPE "$VENV/bin/activate" || \
-    echo 'export OPENBLAS_CORETYPE=ARMV8' >> "$VENV/bin/activate"
-# workaround "cannot allocate memory in static TLS block" quando cv2 viene
-# importato dopo torch (libgomp aarch64): preload sempre attivo nel venv
-grep -q 'LD_PRELOAD=.*libgomp' "$VENV/bin/activate" || \
-    echo 'export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1' >> "$VENV/bin/activate"
+# Workarounds that must be in the environment before Python starts
+# (see nano/jetson_cv/runtime.py for the why):
+add_env() { grep -q "$1" "$VENV/bin/activate" || echo "export $1=$2" >> "$VENV/bin/activate"; }
+add_env OPENBLAS_CORETYPE ARMV8
+add_env LD_PRELOAD /usr/lib/aarch64-linux-gnu/libgomp.so.1
+# Ignore packages in ~/.local: a stray `pip install --user torch` would
+# otherwise silently shadow the venv's copy.
+add_env PYTHONNOUSERSITE 1
+# shellcheck disable=SC1091
 source "$VENV/bin/activate"
-export OPENBLAS_CORETYPE=ARMV8
 
-echo "==== [4/7] pip + numpy + torch + torchvision ===="
-# ultime versioni dei tool compatibili con Python 3.6
-pip install --upgrade "pip==21.3.1" "setuptools==59.6.0" "wheel==0.37.1"
-pip install "numpy==1.19.5"
+echo "==== [4/6] Python packages (offline, from nano/vendor/wheels) ===="
+PIP="pip install --no-index --find-links $WHEELS"
+$PIP "pip==21.3.1" "setuptools==59.6.0" "wheel==0.37.1"
+$PIP -r "$NANO_DIR/setup/requirements.lock"
+$PIP "$WHEELS"/torch-1.10.0a0+git36449ea-cp36-cp36m-linux_aarch64.whl \
+     "$WHEELS"/torchvision-0.11.0a0+fa347eb-cp36-cp36m-linux_aarch64.whl
 
-# la wheel torch (233 MB) vive nella repo splittata in chunk <100 MB
-# (limite file di GitHub): se manca intera, ricomponila e verifica lo sha256
-if ! ls "$WHEELS"/torch-1.10*.whl >/dev/null 2>&1 && \
-   ls "$WHEELS"/torch-split/*.part-00 >/dev/null 2>&1; then
-    echo "Ricompongo la wheel torch dai chunk..."
-    P0=$(ls "$WHEELS"/torch-split/*.part-00)
-    cat "${P0%.part-00}".part-* > "$WHEELS/$(basename "${P0%.part-00}")"
-    (cd "$WHEELS" && sha256sum -c torch-split/SHA256SUM)
-fi
-TORCH_WHL=$(ls "$WHEELS"/torch-1.10*.whl 2>/dev/null | head -1)
-TV_WHL=$(ls "$WHEELS"/torchvision-0.11*.whl 2>/dev/null | head -1)
-[ -n "$TORCH_WHL" ] || { echo "ERRORE: wheel torch mancante in $WHEELS"; exit 1; }
-python -c "import torch" 2>/dev/null || pip install "$TORCH_WHL"
-
-if ! python -c "import torchvision" 2>/dev/null; then
-    if [ -n "$TV_WHL" ] && pip install "$TV_WHL"; then
-        echo "torchvision installato dalla wheel precompilata."
-    else
-        echo "Wheel torchvision non disponibile/installabile: compilo da sorgente (~60-90 min)..."
-        sudo apt-get install -y git
-        rm -rf /tmp/torchvision-src
-        git clone --branch v0.11.1 --depth 1 https://github.com/pytorch/vision /tmp/torchvision-src
-        cd /tmp/torchvision-src
-        export BUILD_VERSION=0.11.1 FORCE_CUDA=1 TORCH_CUDA_ARCH_LIST="5.3"
-        export PATH=/usr/local/cuda/bin:$PATH
-        python setup.py install
-        cd - >/dev/null
-    fi
-fi
-
-echo "==== [5/7] Requirements pip ===="
-pip install -r "$BASE/setup/requirements_jetson.txt"
-if [ "$WANT_TRT" = 1 ]; then
-    echo "-- extra TensorRT (pycuda compila: pazienza...) --"
-    export PATH=/usr/local/cuda/bin:$PATH
-    pip install onnx==1.10.2 protobuf==3.19.6
-    # NO build isolation: altrimenti pip compila numpy 1.12 come build-dep
-    # (vincolo python 3.6) e fallisce su xlocale.h con glibc recenti
-    pip install pycuda==2021.1 --no-build-isolation
-fi
-
-# yolov5 all'import prova a scaricare Arial.ttf da un URL ormai morto (308):
-# mettiamo un TTF locale al posto giusto cosi' non tenta mai la rete
+# yolov5 v6.0 tries to download Arial.ttf from a URL that no longer exists:
+# put a local TTF where it looks, so it never touches the network.
 mkdir -p ~/.config/Ultralytics
 [ -f ~/.config/Ultralytics/Arial.ttf ] || \
     cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf ~/.config/Ultralytics/Arial.ttf
 
-echo "==== [6/7] Verifica ===="
+echo "==== [5/6] jetson-stats (jtop) ===="
+if python3 -c "import jtop" 2>/dev/null; then
+    echo "jtop already installed."
+else
+    echo "Installing jetson-stats 4.3.2 system-wide (needs sudo)..."
+    sudo -H pip3 install --no-index --find-links "$WHEELS" \
+        jetson-stats==4.3.2 distro==1.9.0 smbus2==0.6.1
+    sudo systemctl restart jtop.service || true
+    sudo usermod -aG jtop "$USER"
+    echo "NOTE: log out and back in once, so your user joins the 'jtop' group."
+fi
+if ! id -nG "$USER" | grep -qw video; then
+    sudo usermod -aG video "$USER"
+    echo "NOTE: added $USER to the 'video' group (camera access): log out and back in."
+fi
+
+echo "==== [6/6] Verification ===="
 python - <<'EOF'
 import os
 os.environ.setdefault("OPENBLAS_CORETYPE", "ARMV8")
-ok = True
-import numpy, torch
+import numpy, torch, torchvision, cv2, tensorrt, pycuda.driver, onnx
+ok = torch.cuda.is_available() and "/.venv/" in torch.__file__
 print("numpy       :", numpy.__version__)
-print("torch       :", torch.__version__, "| CUDA:", torch.cuda.is_available())
-if not torch.cuda.is_available():
-    ok = False
-    print("  !! CUDA NON disponibile: qualcosa non va con la wheel torch")
-import torchvision
+print("torch       :", torch.__version__, "| CUDA:", torch.cuda.is_available(), "|", torch.__file__)
 print("torchvision :", torchvision.__version__)
-import torchvision.ops  # verifica gli op compilati (NMS)
-import cv2
-print("cv2         :", cv2.__version__, "| GStreamer:",
-      "YES" in cv2.getBuildInformation().split("GStreamer")[1][:40])
-try:
-    import tensorrt
-    print("tensorrt    :", tensorrt.__version__)
-except ImportError:
-    print("tensorrt    : non visibile (ok se non usi la pipeline TRT)")
-print("\nTUTTO OK" if ok else "\nVERIFICA FALLITA: vedi messaggi sopra")
+print("cv2         :", cv2.__version__)
+print("tensorrt    :", tensorrt.__version__)
+print("onnx        :", onnx.__version__)
+print("\nALL GOOD" if ok else "\nCHECK FAILED: torch must come from nano/.venv and see CUDA")
+raise SystemExit(0 if ok else 1)
 EOF
 
-echo "==== [7/7] jetson-stats (jtop, per il pannello Sistema della dashboard) ===="
-if python -c "import jtop" 2>/dev/null; then
-    echo "jtop OK (gia' installato e importabile nel venv)."
-else
-    echo "jtop non importabile in questo venv: su un sistema NUOVO installalo con:"
-    echo "  sudo -H pip3 install -U jetson-stats"
-    echo "  sudo systemctl restart jtop.service"
-    echo "  sudo usermod -aG jtop \$USER"
-    echo "  (poi disconnettiti/riconnettiti: serve una nuova sessione per il gruppo)"
-    echo "Questi comandi richiedono sudo + un nuovo login: eseguili tu stesso, non li lancia questo script."
-fi
+cat <<EOF
 
-echo
-echo "Setup completato. Per usare l'ambiente:"
-echo "  source ~/cv_projects/venv/bin/activate"
-echo "  cd ~/cv_projects/01_camera_test && python camera_test.py"
-echo
-echo "Dashboard sperimentale (sistema/statistiche/controlli/tracker):"
-echo "  cd ~/cv_projects/03_tensorrt && python demo_server.py --engine ../models/yolov5n_416_fp16.engine --headless"
-echo "Per farla partire da sola al boot: setup/install_demo_service.sh"
-echo
-echo "Prestazioni massime:  sudo nvpmodel -m 0 && sudo jetson_clocks"
+Setup complete. In each new shell:
+    source $VENV/bin/activate
+
+Then, from $NANO_DIR:
+    python3 apps/camera_test.py --headless      # camera only, ~60 fps
+    python3 apps/trt_detect.py --headless       # TensorRT detection, ~30 fps
+    python3 apps/dashboard.py                   # web dashboard on :8090
+
+Start the dashboard at boot:  nano/setup/install_service.sh
+Max performance:              sudo nvpmodel -m 0 && sudo jetson_clocks
+EOF

@@ -1,0 +1,11 @@
+{
+  "label": "YOLOv5s 416",
+  "task": "detect",
+  "decoder": "yolo_v5",
+  "input_size": 416,
+  "labels": "coco80",
+  "onnx": "model.onnx",
+  "engine": "model.fp16.engine",
+  "weights": "yolov5s.pt",
+  "source": "ultralytics/yolov5 v6.0 release weights (COCO 2017). ONNX exported on the Nano with nano/vendor/yolov5-v6.0/export.py --opset 12 at 416x416; engine built on the Nano with trtexec --fp16 (TensorRT 8.2.1, JetPack 4.6.1)."
+}

@@ -1,4 +1,4 @@
 # path  size_bytes  sha256  n_parts  -- see tools/largefiles.py
-nano/models/yolov5l.onnx 186346436 a25ed9301fa9fab99f764bbf87adb5ae121f9d169295dce90a271058279a9132 2
-nano/models/yolov5l_416_fp16.engine 182944103 4c77362068be0edde08343643ffff8a5a2fca3b6f38398f7bcc0224009db0447 2
+nano/models/yolov5l-416/model.fp16.engine 182944103 4c77362068be0edde08343643ffff8a5a2fca3b6f38398f7bcc0224009db0447 2
+nano/models/yolov5l-416/model.onnx 186346436 a25ed9301fa9fab99f764bbf87adb5ae121f9d169295dce90a271058279a9132 2
 nano/vendor/wheels/torch-1.10.0a0+git36449ea-cp36-cp36m-linux_aarch64.whl 244748343 cb586b1faec39c8504214e0c82ef7e9efef8dcde7533507c0b4ff1988ea36af2 3

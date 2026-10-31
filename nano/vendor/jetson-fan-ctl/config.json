@@ -1,0 +1,8 @@
+{
+"FAN_OFF_TEMP":20,
+"FAN_MAX_TEMP":50,
+"UPDATE_INTERVAL":2,
+"MAX_PERF":1,
+"MIN_SPD_DELTA":0,
+"TEMP_ZONE":"thermal_zone0"
+}

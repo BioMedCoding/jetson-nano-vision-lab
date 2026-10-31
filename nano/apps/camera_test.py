@@ -1,56 +1,56 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""Test della camera CSI OV5647: verifica pipeline, misura FPS reali, snapshot.
+"""OV5647 camera test: checks capture, measures real fps, saves snapshots.
 
-Non richiede torch: e' il primo script da lanciare per validare camera+driver.
+No torch, no TensorRT: the first thing to run after booting the OV5647
+kernel. Expect ~60 fps at the sensor's native 640x480.
 
-Uso:
-    python camera_test.py                     # finestra o stream MJPEG (auto)
-    python camera_test.py --headless          # forza lo stream MJPEG
-    python camera_test.py --snapshot-every 5  # salva un jpg ogni 5 s
-Nella finestra: 's' salva uno snapshot, 'q'/ESC esce.
+Usage:
+    python3 apps/camera_test.py                      # window, or stream if no display
+    python3 apps/camera_test.py --headless           # force the browser stream
+    python3 apps/camera_test.py --snapshot-every 5   # save a jpg every 5 s
+In the window: 's' saves a snapshot, 'q'/ESC quits.
 """
-import argparse
 import os
 import sys
-import time
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from common.camera import open_csi_camera  # noqa: E402
-from common.viewer import Viewer           # noqa: E402
-from common.yolo_utils import draw_fps     # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from jetson_cv import runtime  # noqa: E402
+runtime.ensure()
+
+import argparse  # noqa: E402
+import time  # noqa: E402
 
 import cv2  # noqa: E402
 
+from jetson_cv.camera import SENSOR_H, SENSOR_W, open_camera  # noqa: E402
+from jetson_cv.display import Viewer  # noqa: E402
+from jetson_cv.drawing import draw_fps  # noqa: E402
+
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--width", type=int, default=640)
-    ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--fps", type=int, default=30)
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--flip", type=int, default=0,
-                    help="flip-method di nvvidconv (2 = capovolgi 180 gradi)")
+                    help="0 none, 1 90 ccw, 2 180, 3 90 cw")
     ap.add_argument("--headless", action="store_true",
-                    help="forza lo stream MJPEG anche con display")
+                    help="force the MJPEG stream even with a display")
     ap.add_argument("--snapshot-every", type=float, default=0,
-                    help="salva uno snapshot ogni N secondi (0 = disattivato)")
+                    help="save a snapshot every N seconds (0 = off)")
     ap.add_argument("--outdir", default="snapshots")
     args = ap.parse_args()
 
-    cap = open_csi_camera(args.width, args.height, args.fps, args.flip)
+    cap = open_camera(flip=args.flip)
     viewer = Viewer("OV5647 camera test", headless=args.headless or None)
     os.makedirs(args.outdir, exist_ok=True)
 
     n, t0 = 0, time.time()
     fps, last_snap = 0.0, time.time()
-    print("Camera aperta ({}x{}@{}). 's' = snapshot, 'q' = esci.".format(
-        args.width, args.height, args.fps))
+    print("Camera open ({}x{}). 's' = snapshot, 'q' = quit.".format(SENSOR_W, SENSOR_H))
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("Frame non ricevuto: pipeline interrotta.")
+                print("No frame received: capture stopped.")
                 break
             n += 1
             if n % 30 == 0:
@@ -58,28 +58,21 @@ def main():
                 fps = 30.0 / (now - t0)
                 t0 = now
                 if viewer.headless:
-                    print("FPS reali: {:.1f}".format(fps))
+                    print("Real fps: {:.1f}".format(fps))
 
-            snap = False
-            if args.snapshot_every and time.time() - last_snap > args.snapshot_every:
+            snap = bool(args.snapshot_every) and time.time() - last_snap > args.snapshot_every
+            raw = frame.copy()  # snapshots without the fps overlay
+            key = viewer.poll_key(draw_fps(frame, fps))
+            if key in (ord("q"), 27):
+                break
+            if key == ord("s"):
                 snap = True
-            draw_fps(frame, fps)
-            if not viewer.headless:
-                cv2.imshow(viewer.title, frame)
-                key = cv2.waitKey(1) & 0xFF
-                if key in (ord("q"), 27):
-                    break
-                if key == ord("s"):
-                    snap = True
-            else:
-                viewer.show(frame)
-
             if snap:
-                path = os.path.join(
-                    args.outdir, "snap_{}.jpg".format(time.strftime("%Y%m%d_%H%M%S")))
-                cv2.imwrite(path, frame)
+                path = os.path.join(args.outdir, "snap_{}.jpg".format(
+                    time.strftime("%Y%m%d_%H%M%S")))
+                cv2.imwrite(path, raw)
                 last_snap = time.time()
-                print("Snapshot salvato: {}".format(path))
+                print("Snapshot saved: {}".format(path))
     except KeyboardInterrupt:
         pass
     finally:

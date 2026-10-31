@@ -1,0 +1,10 @@
+{
+  "label": "YOLOv8n 416",
+  "task": "detect",
+  "decoder": "yolo_v8",
+  "input_size": 416,
+  "labels": "coco80",
+  "onnx": "model.onnx",
+  "engine": "model.fp16.engine",
+  "source": "ultralytics yolov8n.pt (COCO 2017; copy in training/weights/). ONNX exported on the PC with ultralytics YOLO.export(format='onnx', imgsz=416, opset=12, simplify=True); output (1, 84, N), anchor-free, no objectness column. Engine built on the Nano with trtexec --fp16."
+}

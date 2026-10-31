@@ -1,8 +1,0 @@
-# Extra per la pipeline TensorRT (03_tensorrt): export ONNX + inferenza pycuda.
-# tensorrt e' gia' installato dal sistema JetPack (via --system-site-packages).
-# NOTA: pycuda non ha wheel aarch64 -> compila da sorgente sulla Nano (~15 min).
-# Serve nvcc nel PATH: lo gestisce build_engine.sh / setup_jetson.sh --trt.
-
-onnx==1.10.2
-protobuf==3.19.6
-pycuda==2021.1

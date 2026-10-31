@@ -1,51 +1,51 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""Cattura immagini dalla camera per costruire un dataset di training.
+"""Capture camera frames to build a training dataset.
 
-Le immagini raccolte qui si etichettano poi sull'host (labelImg, Roboflow,
-CVAT...) e si usano per il fine-tuning di YOLOv5 sul PC con GPU
-(vedi cv_training/README_TRAINING.md sull'host).
+Images are saved at the sensor's native 640x480 (4:3), never upscaled or
+stretched, so what you label is exactly what the model will see live. Label
+them on a PC (labelImg, CVAT, Roboflow, ...) and fine-tune there, see
+training/README.md.
 
-Uso:
-    python capture_images.py --interval 2            # un frame ogni 2 s
-    python capture_images.py --count 200             # si ferma a 200 immagini
-Nella finestra: 'c' cattura manuale, 'q'/ESC esce.
+Usage:
+    python3 apps/capture_dataset.py --interval 2      # one frame every 2 s
+    python3 apps/capture_dataset.py --count 200       # stop after 200 images
+In the window: 'c' captures manually, 'q'/ESC quits.
 """
-import argparse
 import os
 import sys
-import time
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from common.camera import open_csi_camera  # noqa: E402
-from common.viewer import Viewer           # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from jetson_cv import runtime  # noqa: E402
+runtime.ensure()
+
+import argparse  # noqa: E402
+import time  # noqa: E402
 
 import cv2  # noqa: E402
 
+from jetson_cv.camera import open_camera  # noqa: E402
+from jetson_cv.display import Viewer  # noqa: E402
+
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--outdir", default="dataset/images")
     ap.add_argument("--prefix", default="img")
     ap.add_argument("--interval", type=float, default=2.0,
-                    help="secondi tra le catture automatiche (0 = solo manuale)")
+                    help="seconds between automatic captures (0 = manual only)")
     ap.add_argument("--count", type=int, default=0,
-                    help="numero massimo di immagini (0 = illimitato)")
-    ap.add_argument("--width", type=int, default=1280,
-                    help="risoluzione di cattura (piu' alta = dataset migliore)")
-    ap.add_argument("--height", type=int, default=720)
-    ap.add_argument("--fps", type=int, default=30)
+                    help="maximum number of images (0 = unlimited)")
     ap.add_argument("--flip", type=int, default=0)
     ap.add_argument("--headless", action="store_true")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
-    cap = open_csi_camera(args.width, args.height, args.fps, args.flip)
-    viewer = Viewer("Cattura dataset", headless=args.headless or None)
+    cap = open_camera(flip=args.flip)
+    viewer = Viewer("Dataset capture", headless=args.headless or None)
     if viewer.headless and args.interval <= 0:
         args.interval = 2.0
-        print("Headless: cattura automatica ogni 2 s.")
+        print("Headless: automatic capture every 2 s.")
 
     saved, last = 0, 0.0
     try:
@@ -54,20 +54,14 @@ def main():
             if not ret:
                 break
             grab = args.interval > 0 and (time.time() - last) >= args.interval
-
             preview = frame.copy()
-            cv2.putText(preview, "salvate: {}".format(saved), (10, 30),
+            cv2.putText(preview, "saved: {}".format(saved), (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            if not viewer.headless:
-                cv2.imshow(viewer.title, preview)
-                key = cv2.waitKey(1) & 0xFF
-                if key in (ord("q"), 27):
-                    break
-                if key == ord("c"):
-                    grab = True
-            else:
-                viewer.show(preview)
-
+            key = viewer.poll_key(preview)
+            if key in (ord("q"), 27):
+                break
+            if key == ord("c"):
+                grab = True
             if grab:
                 name = "{}_{}_{:04d}.jpg".format(
                     args.prefix, time.strftime("%Y%m%d_%H%M%S"), saved)
@@ -82,10 +76,9 @@ def main():
     finally:
         cap.release()
         viewer.close()
-
-    print("\nSalvate {} immagini in {}/".format(saved, args.outdir))
-    print("Prossimi passi: copia la cartella sull'host, etichetta le immagini")
-    print("e segui cv_training/README_TRAINING.md per il fine-tuning.")
+    print("\nSaved {} images in {}/".format(saved, args.outdir))
+    print("Next: copy the folder to your PC, label the images, then follow")
+    print("training/README.md to fine-tune a model.")
 
 
 if __name__ == "__main__":

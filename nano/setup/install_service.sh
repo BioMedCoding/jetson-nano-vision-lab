@@ -1,52 +1,55 @@
 #!/bin/bash
-# Installa/disinstalla il servizio systemd della dashboard CV (autostart al
-# boot, restart automatico su crash). Esegui SULLA JETSON, nel tuo terminale
-# (usa sudo internamente: serve un TTY reale, non lanciarlo dal tool SSH).
+# Install / remove the systemd service that starts the dashboard at boot
+# (and restarts it if it crashes). Run ON the Jetson; uses sudo.
 #
-# Uso:
-#   ./install_demo_service.sh              # installa e avvia
-#   ./install_demo_service.sh --force      # sovrascrive se gia' presente e diverso
-#   ./install_demo_service.sh --uninstall  # ferma, disabilita, rimuove
+# Usage:
+#   nano/setup/install_service.sh                         # install and start
+#   nano/setup/install_service.sh --allow-system-control  # ... with power/fan controls
+#   nano/setup/install_service.sh --model yolov8n-416     # ... with another model
+#   nano/setup/install_service.sh --uninstall             # stop, disable, remove
+#
+# Any option other than --uninstall is passed to apps/dashboard.py.
 set -e
 
 UNIT_NAME="cv-demo.service"
-SRC="$(cd "$(dirname "$0")" && pwd)/$UNIT_NAME"
+NANO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TEMPLATE="$NANO_DIR/setup/systemd/$UNIT_NAME.in"
 DEST="/etc/systemd/system/$UNIT_NAME"
 
 if [ ! -f /etc/nv_tegra_release ]; then
-    echo "ERRORE: questo script va eseguito sulla Jetson, non sull'host."; exit 1
+    echo "ERROR: run this on the Jetson, not on your PC."; exit 1
 fi
 
 if [ "$1" = "--uninstall" ]; then
-    echo "Fermo e disabilito $UNIT_NAME..."
-    sudo systemctl stop "$UNIT_NAME" 2>/dev/null || true
-    sudo systemctl disable "$UNIT_NAME" 2>/dev/null || true
+    sudo systemctl disable --now "$UNIT_NAME" 2>/dev/null || true
     sudo rm -f "$DEST"
     sudo systemctl daemon-reload
-    echo "Rimosso."
+    echo "Removed $UNIT_NAME."
     exit 0
 fi
 
-if ! groups "$USER" | grep -qw video; then
-    echo "ATTENZIONE: l'utente $USER non e' nel gruppo 'video' (serve per /dev/video0)."
-    echo "  Esegui:  sudo usermod -aG video $USER"
-    echo "  poi disconnettiti/riconnettiti (serve una nuova sessione) e rilancia questo script."
+[ -x "$NANO_DIR/.venv/bin/python3" ] || { echo "ERROR: run nano/setup/setup_jetson.sh first."; exit 1; }
+if ! id -nG "$USER" | grep -qw video; then
+    echo "ERROR: $USER is not in the 'video' group (needed for /dev/video0)."
+    echo "  sudo usermod -aG video $USER   then log out and back in."
     exit 1
 fi
 
-if [ -f "$DEST" ] && ! cmp -s "$SRC" "$DEST" && [ "$1" != "--force" ]; then
-    echo "Un $UNIT_NAME diverso e' gia' installato in $DEST."
-    echo "Controlla la differenza con: diff '$SRC' '$DEST'"
-    echo "Rilancia con --force per sovrascriverlo."
-    exit 1
+TMP=$(mktemp)
+sed -e "s#@USER@#$USER#g" -e "s#@NANO_DIR@#$NANO_DIR#g" -e "s#@EXTRA_ARGS@#$*#" \
+    "$TEMPLATE" > "$TMP"
+if [ -f "$DEST" ] && ! cmp -s "$TMP" "$DEST"; then
+    echo "Replacing the existing $DEST (diff below):"
+    diff "$DEST" "$TMP" || true
 fi
-
-echo "Installo $UNIT_NAME in $DEST..."
-sudo cp "$SRC" "$DEST"
+sudo install -m 644 "$TMP" "$DEST"
+rm -f "$TMP"
 sudo systemctl daemon-reload
-sudo systemctl enable --now "$UNIT_NAME"
+sudo systemctl enable "$UNIT_NAME"
+sudo systemctl restart "$UNIT_NAME"
 
 echo
-echo "Fatto. Verifica con:"
+echo "Installed. Check it with:"
 echo "  systemctl status $UNIT_NAME"
-echo "  curl -s http://localhost:8090/api/stats | python3 -m json.tool"
+echo "  journalctl -u $UNIT_NAME -f"
+echo "  open http://$(hostname).local:8090/ in a browser on your network"

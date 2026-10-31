@@ -15,7 +15,7 @@ host/jetson.env
 *.joined
 
 # >>> largefiles (managed by tools/largefiles.py, do not edit)
-/nano/models/yolov5l.onnx
-/nano/models/yolov5l_416_fp16.engine
+/nano/models/yolov5l-416/model.fp16.engine
+/nano/models/yolov5l-416/model.onnx
 /nano/vendor/wheels/torch-1.10.0a0+git36449ea-cp36-cp36m-linux_aarch64.whl
 # <<< largefiles

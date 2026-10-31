@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jetson Nano Vision Dashboard</title>
+<link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+
+<header>
+  <span id="conn-dot"></span>
+  <h1>Jetson Nano · Vision Dashboard</h1>
+  <div class="header-spacer"></div>
+  <span class="header-metric"><b id="hdr-fps">--</b> fps</span>
+  <span class="header-metric" id="hdr-model">model: --</span>
+</header>
+
+<div class="app-layout">
+
+  <!-- ===== Video column: always visible, independent of the tabs ===== -->
+  <aside id="video-col">
+    <div class="detection-toggle-row">
+      <button class="btn detection-toggle" id="btn-detection-toggle" data-enabled="true">
+        <span class="detection-toggle-dot"></span>
+        <span id="detection-toggle-label">Detection on</span>
+      </button>
+      <span class="hint">Pause detection to save GPU time and heat:
+        the video stays live, only the model is paused.</span>
+    </div>
+    <div id="video-wrap">
+      <img id="stream" src="/stream" alt="camera stream">
+      <canvas id="roi-canvas"></canvas>
+    </div>
+    <div class="video-controls">
+      <span class="hint">Drag on the video to draw a zone (ROI): enter/exit
+        counting uses the centre of each tracked object's box relative to
+        this rectangle.</span>
+      <div class="video-controls-row">
+        <button class="btn" id="btn-clear-roi">Clear ROI</button>
+        <label class="checkbox-row" style="margin:0;">
+          <input type="checkbox" id="ctl-roi-enabled">
+          <span>Zone counting on</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="model-chip-row" class="model-chip-row">
+      <span class="model-chip-label">Active model</span>
+      <span class="model-chip" id="video-model-chip">--</span>
+      <span class="model-chip" id="video-fps-chip">-- fps</span>
+      <span class="model-chip" id="video-infer-chip">inf -- ms</span>
+    </div>
+
+    <div id="roi-status-bar" class="roi-status-bar">
+      <p class="section-title">Zone (ROI): live events</p>
+      <div class="roi-status-counts">
+        <span>Inside now <b id="roi-bar-inside">0</b></span>
+        <span>Entered <b id="roi-bar-enter">0</b></span>
+        <span>Left <b id="roi-bar-exit">0</b></span>
+      </div>
+      <ul id="roi-log" class="roi-log">
+        <li class="roi-log-empty">No events yet.</li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- ===== Controls column: tabs, the video stays visible beside them ===== -->
+  <section id="controls-col">
+
+    <nav class="tabs">
+      <button data-tab="system" class="active">System</button>
+      <button data-tab="stats">Statistics</button>
+      <button data-tab="image">Image</button>
+      <button data-tab="detection">Detection</button>
+      <button data-tab="power">Power</button>
+    </nav>
+
+    <main>
+
+      <!-- ===== System (read-only) ===== -->
+      <section class="tab-panel active" id="tab-system">
+        <p class="section-title">Load and temperatures (jetson-stats)</p>
+        <div class="gauges-row" id="gauges-row"></div>
+
+        <div class="grid" style="margin-top:18px;">
+          <div class="card">
+            <h3>Fan</h3>
+            <div class="stat-value" id="sys-fan">--<span class="stat-unit">%</span></div>
+            <div class="stat-sub" id="sys-fan-rpm">-- rpm</div>
+          </div>
+          <div class="card">
+            <h3>Power mode</h3>
+            <div class="stat-value" id="sys-powermode" style="font-size:20px;">--</div>
+            <div class="stat-sub" id="sys-power-mw">-- mW</div>
+          </div>
+          <div class="card">
+            <h3>RAM</h3>
+            <div class="stat-value" id="sys-ram-pct">--<span class="stat-unit">%</span></div>
+            <div class="stat-sub" id="sys-ram-mb">-- / -- MB</div>
+          </div>
+          <div class="card">
+            <h3>Dashboard uptime</h3>
+            <div class="stat-value" id="sys-uptime" style="font-size:20px;">--</div>
+            <div class="stat-sub" id="sys-frames">-- frames</div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:14px;">Fan and power mode are
+          controlled from the "Power" tab; here they are read-only.</p>
+      </section>
+
+      <!-- ===== Statistics ===== -->
+      <section class="tab-panel" id="tab-stats">
+        <p class="section-title">Inference &amp; FPS</p>
+        <div class="chart-toggle">
+          <button class="btn chart-toggle-btn active" id="btn-chart-infer">Inference time (ms)</button>
+          <button class="btn chart-toggle-btn" id="btn-chart-fps">FPS</button>
+        </div>
+        <div class="card chart-wrap">
+          <canvas id="infer-chart" width="1080" height="220" style="width:100%;height:auto;"></canvas>
+          <div id="chart-tooltip"></div>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table" style="margin-top:10px;">
+            <tr><th>Current</th><th>Mean</th><th>Median (p50)</th><th>p95</th><th>Min</th><th>Max</th><th>Std dev</th></tr>
+            <tr>
+              <td class="num" id="st-current">--</td>
+              <td class="num" id="st-mean">--</td>
+              <td class="num" id="st-p50">--</td>
+              <td class="num" id="st-p95">--</td>
+              <td class="num" id="st-min">--</td>
+              <td class="num" id="st-max">--</td>
+              <td class="num" id="st-std">--</td>
+            </tr>
+          </table>
+        </div>
+
+        <p class="section-title" style="margin-top:22px;">Detection</p>
+        <div class="two-col">
+          <div>
+            <p class="section-title">Count per class: current frame</p>
+            <table class="data-table" id="table-frame">
+              <tr><th>Class</th><th class="num">N</th></tr>
+            </table>
+          </div>
+          <div>
+            <p class="section-title">Unique IDs seen (cumulative)</p>
+            <table class="data-table" id="table-cumulative">
+              <tr><th>Class</th><th class="num">N</th></tr>
+            </table>
+          </div>
+        </div>
+        <div class="grid" style="margin-top:14px;">
+          <div class="card"><h3>Mean confidence (current frame)</h3><div class="stat-value" id="st-mean-conf">--</div></div>
+        </div>
+
+        <p class="section-title" style="margin-top:22px;">Zone (ROI)</p>
+        <div class="grid">
+          <div class="card"><h3>Inside now</h3><div class="stat-value" id="roi-inside">--</div></div>
+          <div class="card"><h3>Total entries</h3><div class="stat-value" id="roi-enter">--</div></div>
+          <div class="card"><h3>Total exits</h3><div class="stat-value" id="roi-exit">--</div></div>
+          <div class="card"><h3>Peak simultaneous</h3><div class="stat-value" id="roi-peak">--</div></div>
+          <div class="card"><h3>Active tracks</h3><div class="stat-value" id="tracker-active">--</div></div>
+        </div>
+      </section>
+
+      <!-- ===== Image ===== -->
+      <section class="tab-panel" id="tab-image">
+        <p class="section-title">Image adjustments (applied to both the display and the model input)</p>
+
+        <div class="control-row">
+          <label for="ctl-brightness">Brightness</label>
+          <input type="range" id="ctl-brightness" min="-100" max="100" step="1" value="0">
+          <output id="out-brightness">0</output>
+        </div>
+        <p class="hint field-help">Shifts the frame's average brightness (adds
+          a constant to every pixel). Useful in low light; too much blows out
+          detail and can lose boxes on bright subjects.</p>
+
+        <div class="control-row">
+          <label for="ctl-contrast">Contrast</label>
+          <input type="range" id="ctl-contrast" min="0.5" max="3.0" step="0.05" value="1.0">
+          <output id="out-contrast">1.00</output>
+        </div>
+        <p class="hint field-help">Amplifies the difference between light and
+          dark. Values &gt;1 help with flat or hazy scenes; very high values
+          saturate colours and can confuse the detector with artificial
+          edges.</p>
+
+        <div class="control-row">
+          <label for="ctl-filter">Filter</label>
+          <select id="ctl-filter">
+            <option value="none">None</option>
+            <option value="gray">Grayscale</option>
+            <option value="clahe">Equalization (CLAHE)</option>
+            <option value="sharpen">Sharpen</option>
+            <option value="blur">Blur</option>
+            <option value="edge">Edges (Canny)</option>
+          </select>
+          <span></span>
+        </div>
+        <p class="hint field-help" id="filter-hint">No transformation beyond
+          brightness/contrast: the best choice for detection in normal
+          conditions.</p>
+      </section>
+
+      <!-- ===== Detection ===== -->
+      <section class="tab-panel" id="tab-detection">
+        <p class="section-title">Detection thresholds</p>
+
+        <div class="control-row">
+          <label for="ctl-conf">Confidence</label>
+          <input type="range" id="ctl-conf" min="0.05" max="0.95" step="0.01" value="0.4">
+          <output id="out-conf">0.40</output>
+        </div>
+        <p class="hint field-help">Minimum score below which a detection is
+          dropped. Higher = fewer false positives but real, less certain
+          objects may be missed; lower = more boxes, including wrong ones.
+          0.3&ndash;0.5 is a good starting point for these models.</p>
+
+        <div class="control-row">
+          <label for="ctl-iou">IoU (NMS)</label>
+          <input type="range" id="ctl-iou" min="0.1" max="0.9" step="0.01" value="0.45">
+          <output id="out-iou">0.45</output>
+        </div>
+        <p class="hint field-help">Overlap above which two boxes are treated as
+          duplicates of the same object (one is dropped by non-maximum
+          suppression). Lower = more aggressive merging (close or overlapping
+          objects may be lost); higher = more leftover, redundant boxes on
+          the same object.</p>
+
+        <p class="section-title" style="margin-top:22px;">Model</p>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>Active model</h3>
+          <div class="stat-value" id="model-active-name" style="font-size:18px;">--</div>
+          <div class="stat-sub" id="model-active-meta">--</div>
+        </div>
+        <div class="model-row">
+          <select id="ctl-model"></select>
+          <button class="btn primary" id="btn-apply-model">Switch model</button>
+        </div>
+        <div id="model-status"></div>
+
+        <p class="section-title" style="margin-top:22px;">Extras</p>
+        <div class="checkbox-row">
+          <input type="checkbox" id="ctl-trajectories" checked>
+          <label for="ctl-trajectories">Show tracked-object trajectories</label>
+        </div>
+        <p class="hint field-help">Draws the trail of each tracked object's
+          recent centres. Visual only, no effect on detection or speed.</p>
+        <div class="checkbox-row">
+          <input type="checkbox" id="ctl-count-classes" checked>
+          <label for="ctl-count-classes">Count per class (see the Statistics tab)</label>
+        </div>
+        <p class="hint field-help">Fills the per-class count tables in the
+          Statistics tab. Turn it off if you don't need that detail.</p>
+
+        <p class="section-title" style="margin-top:22px;">Performance &amp; readability</p>
+        <div class="control-row">
+          <label for="ctl-stride">Infer every N frames</label>
+          <input type="range" id="ctl-stride" min="1" max="10" step="1" value="1">
+          <output id="out-stride">1</output>
+        </div>
+        <p class="hint field-help">Runs real inference on only 1 frame in N,
+          reusing the last detections in between. It is the one real lever
+          for display fps on this hardware (the Jetson Nano has no DLA and no
+          useful INT8): higher N = smoother video but detections lag behind
+          fast objects. 1 = off.</p>
+
+        <div class="control-row">
+          <label for="ctl-jpeg">Stream JPEG quality</label>
+          <input type="range" id="ctl-jpeg" min="10" max="95" step="5" value="80">
+          <output id="out-jpeg">80</output>
+        </div>
+        <p class="hint field-help">Compression quality of the video stream to
+          the browser only. It does not affect inference (which works on the
+          uncompressed frame): it only reduces encoding load and bandwidth
+          while a client is connected.</p>
+
+        <div class="control-row" style="grid-template-columns: 140px 1fr;">
+          <label for="ctl-class-filter">Class filter</label>
+          <select id="ctl-class-filter" multiple size="6"></select>
+        </div>
+        <p class="hint field-help">Limits which classes are drawn and counted
+          (Ctrl/Cmd-click for multiple; no selection = all). It does
+          <b>not</b> speed anything up: decoding and NMS still run over every
+          class; this filter only acts afterwards, on what is shown.</p>
+      </section>
+
+      <!-- ===== Power ===== -->
+      <section class="tab-panel" id="tab-power">
+        <p class="hint" id="power-locked-note" style="display:none;">These
+          controls are disabled. Start the dashboard with
+          <code>--allow-system-control</code> to change power mode and fan
+          settings from this page.</p>
+        <p class="section-title">Power mode and fan</p>
+
+        <div class="control-row" style="grid-template-columns: 140px 1fr;">
+          <label for="ctl-powermode">Power mode</label>
+          <select id="ctl-powermode"></select>
+        </div>
+        <p class="hint field-help">The Jetson's power mode (nvpmodel) sets the
+          maximum CPU/GPU clocks. MAXN removes the limits (more fps, more
+          power and heat); the 5W mode caps clocks to save energy at the cost
+          of inference fps. Some changes need a reboot to apply fully.</p>
+
+        <div class="control-row" style="grid-template-columns: 140px 1fr;">
+          <label for="ctl-fan-profile">Fan</label>
+          <select id="ctl-fan-profile">
+            <option value="temp_control">Automatic (temperature based)</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <p class="hint field-help">Automatic follows the measured temperature:
+          the safe choice for long runs. Manual pins the speed set below,
+          useful for noise/temperature tests or full cooling under heavy
+          load.</p>
+
+        <div class="control-row" id="fan-speed-row">
+          <label for="ctl-fan-speed">Fan speed</label>
+          <input type="range" id="ctl-fan-speed" min="0" max="100" step="5" value="100">
+          <output id="out-fan-speed">100%</output>
+        </div>
+
+        <p class="section-title" style="margin-top:22px;">Shortcut</p>
+        <button class="btn primary" id="btn-max-performance" style="margin-bottom:12px;">Maximum performance</button>
+        <p class="hint" style="margin-top:0;">Sets the fastest available power
+          mode and the fan to 100% manual. It does not revert by itself: set
+          the fan back to "Automatic" and your preferred power mode when you
+          are done, if you want less noise and power draw.</p>
+
+        <p class="section-title" style="margin-top:22px;">System fan service</p>
+        <p class="hint">An independent service (<code>automagic-fan</code>,
+          optional) that sets the fan from the temperature every few seconds
+          by writing directly to the hardware. <strong>While it runs it
+          overrides any manual value set above within 1-2 s</strong>: stop it
+          here if you want the manual slider to stick, keep it running for
+          thermal protection even when the dashboard is closed.</p>
+        <div class="video-controls-row" style="margin-bottom:14px;">
+          <span>Status: <b id="fansvc-status">--</b></span>
+          <button class="btn" id="btn-fansvc-start">Start</button>
+          <button class="btn" id="btn-fansvc-stop">Stop</button>
+        </div>
+
+        <div class="control-row" style="grid-template-columns: 190px 1fr 56px;">
+          <label for="fansvc-off">Fan off below (°C)</label>
+          <input type="range" id="fansvc-off" min="10" max="80" step="1" value="28">
+          <output id="fansvc-off-out">28</output>
+        </div>
+        <div class="control-row" style="grid-template-columns: 190px 1fr 56px;">
+          <label for="fansvc-max">Fan 100% above (°C)</label>
+          <input type="range" id="fansvc-max" min="20" max="95" step="1" value="40">
+          <output id="fansvc-max-out">40</output>
+        </div>
+        <p class="hint field-help">Below the first threshold the fan is off;
+          above the second it runs at full speed; in between the speed rises
+          linearly with temperature.</p>
+
+        <div class="control-row" style="grid-template-columns: 190px 1fr 56px;">
+          <label for="fansvc-interval">Update interval (s)</label>
+          <input type="range" id="fansvc-interval" min="1" max="30" step="1" value="2">
+          <output id="fansvc-interval-out">2</output>
+        </div>
+        <p class="hint field-help">How often the service re-reads the
+          temperature and recomputes the speed. Low values react faster to a
+          sudden heat-up; high values keep the fan from changing speed all
+          the time.</p>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="fansvc-maxperf" checked>
+          <label for="fansvc-maxperf">Maximise clocks when the service starts (jetson_clocks)</label>
+        </div>
+        <p class="hint field-help">Runs once when the service starts,
+          independently of the power mode above: pins the clocks to the
+          maximum allowed by the power mode active at that moment.</p>
+
+        <button class="btn primary" id="btn-fansvc-save" style="margin-bottom:8px;">Save settings</button>
+        <p class="hint" style="margin-top:0;" id="fansvc-save-status"></p>
+      </section>
+
+    </main>
+  </section>
+
+</div>
+
+<script src="/static/dashboard.js"></script>
+</body>
+</html>

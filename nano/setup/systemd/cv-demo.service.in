@@ -1,0 +1,26 @@
+# Template: nano/setup/install_service.sh fills in @USER@ and @NANO_DIR@
+# and installs the result as /etc/systemd/system/cv-demo.service.
+[Unit]
+Description=Jetson Nano vision dashboard (TensorRT detection, port 8090)
+After=network-online.target
+Wants=network-online.target
+# No dependency on a dev-video0.device unit: this system does not create one
+# for the fixed CSI camera. Camera reconnection is handled in the app
+# (jetson_cv.camera.ReconnectingCamera, with backoff and retry).
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@NANO_DIR@
+ExecStart=@NANO_DIR@/.venv/bin/python3 @NANO_DIR@/apps/dashboard.py --headless @EXTRA_ARGS@
+Restart=always
+RestartSec=3
+# Same workarounds the venv's activate script exports (see jetson_cv/runtime.py).
+Environment=OPENBLAS_CORETYPE=ARMV8
+Environment=LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1
+Environment=PYTHONNOUSERSITE=1
+# Without this, print() output reaches the journal in delayed blocks.
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
