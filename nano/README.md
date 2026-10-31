@@ -15,9 +15,9 @@ TensorRT FP16 at 416 about **30 fps live** (full numbers in
 # from your PC (or git clone the repo on the Jetson)
 host/sync_to_nano.sh
 # on the Jetson
-~/jetson-nano-ov5647-vision/nano/setup/setup_jetson.sh
-source ~/jetson-nano-ov5647-vision/nano/.venv/bin/activate
-cd ~/jetson-nano-ov5647-vision/nano
+~/jetson-nano-vision-lab/nano/setup/setup_jetson.sh
+source ~/jetson-nano-vision-lab/nano/.venv/bin/activate
+cd ~/jetson-nano-vision-lab/nano
 ```
 
 Offline except for a few apt packages: every Python wheel is in

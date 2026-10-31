@@ -168,7 +168,7 @@ echo
 
 mkdir -p "$TARGET/etc"
 {
-  echo "Deployed by camera/scripts/deploy.sh (jetson-nano-ov5647-vision)"
+  echo "Deployed by camera/scripts/deploy.sh (jetson-nano-vision-lab)"
   echo "Date: $(date -Is)"
   echo "Kernel release: $KERNEL_RELEASE"
   echo "DTB: $DTB_NAME"

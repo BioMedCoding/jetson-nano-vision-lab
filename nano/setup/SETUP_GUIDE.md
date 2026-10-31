@@ -11,8 +11,8 @@ L4T R32.7.1 / JetPack 4.6.1, Ubuntu 18.04**, with the OV5647 kernel from
 # on your PC: copy nano/ and tools/ to the Jetson (or git clone the repo there)
 host/sync_to_nano.sh
 # on the Jetson:
-~/jetson-nano-ov5647-vision/nano/setup/setup_jetson.sh          # ~5 min, offline except apt
-source ~/jetson-nano-ov5647-vision/nano/.venv/bin/activate
+~/jetson-nano-vision-lab/nano/setup/setup_jetson.sh          # ~5 min, offline except apt
+source ~/jetson-nano-vision-lab/nano/.venv/bin/activate
 ```
 
 The script ends with a check that must print `ALL GOOD`.
@@ -72,7 +72,7 @@ sudo -H pip3 install --no-index --find-links nano/vendor/wheels jetson-stats==4.
 Then the first real test, camera only:
 
 ```bash
-cd ~/jetson-nano-ov5647-vision/nano
+cd ~/jetson-nano-vision-lab/nano
 python3 apps/camera_test.py --headless      # expect "Real fps: 62.5"
 python3 tests/test_models.py                # every model on the reference images
 ```

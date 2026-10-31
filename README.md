@@ -1,4 +1,4 @@
-# Jetson Nano + OV5647: a computer-vision playground
+# Jetson Nano Vision Lab
 
 Run real-time object detection on an **NVIDIA Jetson Nano** with the cheap
 **OV5647 camera (Raspberry Pi Camera v1 and its clones)**, a sensor NVIDIA
@@ -50,7 +50,7 @@ verified chunks).
 2. **Connect PC and Jetson** ([docs/networking.md](docs/networking.md)), then
    from the PC: `host/sync_to_nano.sh`.
 3. **Install the playground** on the Jetson (offline):
-   `~/jetson-nano-ov5647-vision/nano/setup/setup_jetson.sh`
+   `~/jetson-nano-vision-lab/nano/setup/setup_jetson.sh`
 4. **See it run**: `host/run_demo.sh dashboard` opens the live dashboard in
    your browser.
 5. **Train your own model** (optional): `training/setup/setup_host.sh`, then
