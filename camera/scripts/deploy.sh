@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-KDIR="$REPO_ROOT/source/public/kernel/kernel-4.9"
+KDIR="$REPO_ROOT/kernel-source/kernel/kernel-4.9"
 KERNEL_RELEASE="4.9.253"
 DTB_NAME="tegra210-p3448-0000-p3449-0000-b00-ov5647.dtb"
 
@@ -168,7 +168,7 @@ echo
 
 mkdir -p "$TARGET/etc"
 {
-  echo "Deployed by jetson-nano-ov5647/scripts/deploy.sh"
+  echo "Deployed by camera/scripts/deploy.sh (jetson-nano-ov5647-vision)"
   echo "Date: $(date -Is)"
   echo "Kernel release: $KERNEL_RELEASE"
   echo "DTB: $DTB_NAME"

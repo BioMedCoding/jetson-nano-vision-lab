@@ -1,11 +1,11 @@
 # Patch index
 
-These patches are **documentation only** — the source tree under `source/public/`
+These patches are **documentation only** — the source tree under `kernel-source/`
 already has every one of them applied, so you do **not** need to apply these to
 build. They exist so the changes are reviewable file-by-file instead of buried
 in a ~950 MB source drop, and so they can be cherry-picked or re-applied to a
 different L4T source tree with `patch -p1` or `git apply`, run from
-`source/public/`.
+`kernel-source/`.
 
 All patches are unified diffs against the pristine NVIDIA L4T R32.7.1 source
 (kernel 4.9.253), extracted from `kernel_src.tbz2` as shipped by NVIDIA.
@@ -65,7 +65,7 @@ applied the camera delivers real frames at ~62.5 fps (640x480 RAW10).
 | `0025-ov5647-dtsi-mode0-real-values.patch` | `mode0` in the sensor DTSI described a fictitious 3264x2464@21fps/182.4MHz mode (copy-paste from IMX219). The driver transmits exactly one fixed mode; `mode0` now carries its real values: 640x480, `bayer_bggr`, `line_length=1852`, `pix_clk_hz=58333000`, `embedded_metadata_height=0`. These feed `camera_common`/CSI settle-time math, so they must match what's actually on the wire. |
 
 Two operational notes that are **not** in any patch but matter for userspace
-(both encoded in `cv/cv_projects/common/camera.py`):
+(both encoded in `nano/jetson_cv/camera.py`):
 
 - The Tegra-specific V4L2 control `TEGRA_CAMERA_CID_VI_BYPASS_MODE` must be
   **0** for V4L2 capture: with bypass=1 `vi2_channel_start_streaming()` returns

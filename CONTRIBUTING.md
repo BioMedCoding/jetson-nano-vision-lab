@@ -1,86 +1,88 @@
-# Working on this repo — how to add features without breaking the archive
+# Contributing: how to change things without breaking the archive
 
-This repo has one unusual property to respect: it is the **archive of record**
-— sources, binaries and docs must stay in agreement with each other and with
-what actually runs on the Jetson. Every workflow below ends with "verify on
-hardware, then commit source + prebuilt + docs together".
+This repo has one unusual property to respect: it is an **archive of
+record** for an old board. Sources, binaries and docs must agree with each
+other and with what actually runs on a Jetson Nano, and nothing it needs may
+depend on a download link. Every workflow below ends with "verify on
+hardware, then commit source + binaries + docs together".
 
-## The two-tree situation (on the original dev machine)
+## Ground rules
 
-On the machine this was developed on, kernel work happens in a separate
-build tree (`~/jetson_work/Linux_for_Tegra/source/public/`) and is then
-synced here. If you're starting fresh from a clone, you don't have that
-split: `source/public/` in this repo **is** your build tree —
-`scripts/build.sh` builds it in place. Either way the rule is the same:
-whatever tree you build from, the repo must end up containing the exact
-sources of the binaries in `prebuilt/`.
+- **Verify on the device.** A change to `camera/` or `nano/` is not done until
+  it ran on a Jetson Nano with JetPack 4.6.1.
+- **No new download links.** Anything an install needs lives in the repo
+  (wheels, weights, engines). Files of 95 MB or more are stored as chunks:
+  `tools/largefiles.py split <file>`, which also records them in
+  `largefiles.manifest` and git-ignores the original. Never commit a file of
+  100 MB or more (GitHub's limit).
+- **Vendored code keeps a `VENDORED.md`** (upstream, commit, license) and a
+  `LOCAL_PATCHES.diff` against that commit. Patch it only when necessary, and
+  regenerate the diff.
+- **English** in code, comments, UI text and docs.
 
-## Adding/changing a kernel-side feature (driver, DT)
+## Kernel side (`camera/`)
 
-1. Edit sources (in your build tree or directly in `source/public/`).
-2. Build: `./scripts/build.sh`, or by hand from `source/public/kernel/kernel-4.9`:
-   `export CROSS_COMPILE=aarch64-linux-gnu- ARCH=arm64`
-   - `make -j$(nproc) Image` (~10 s incremental)
-   - `make -j$(nproc) M=drivers/media/i2c modules` (ov5647.ko only, seconds)
-   - `make -j$(nproc) dtbs` (if DT changed)
-3. Deploy to the Jetson: `scp` to the user's home, then on the Jetson
-   `sudo cp` into place (`/boot/Image-ov5647`, `/boot/dtb/…`,
-   `/lib/modules/4.9.253/…` + `sudo depmod -a`) and **reboot** — the ov5647
-   module cannot be hot-reloaded (the built-in VI driver pins it) and Image/DTB
-   obviously need a boot. `scripts/deploy.sh` automates the SD-card variant.
+1. Edit `camera/kernel-source/` (it is the build tree).
+2. Build: `camera/scripts/build.sh`, or by hand from
+   `camera/kernel-source/kernel/kernel-4.9` with
+   `export CROSS_COMPILE=aarch64-linux-gnu- ARCH=arm64`:
+   - `make -j$(nproc) Image` (seconds when incremental)
+   - `make -j$(nproc) M=drivers/media/i2c modules` (ov5647.ko only)
+   - `make -j$(nproc) dtbs` (if the device tree changed)
+3. Deploy: `camera/scripts/deploy.sh` (SD card), or copy by hand to
+   `/boot/Image-ov5647`, `/boot/dtb/...`, `/lib/modules/4.9.253/...` plus
+   `sudo depmod -a`, and **reboot**: the ov5647 module cannot be hot-reloaded
+   (the built-in VI driver pins it) and Image/DTB need a boot anyway.
 4. Verify on hardware. Minimum bar for camera changes:
-   `python3 ~/cv_projects/01_camera_test/camera_test.py --headless`
-   (expect ~62.5 fps) and a look at an actual frame. For anything CSI-related,
-   arm the zero-cost tracing first — see `docs/CAMERA_DEBUG.md`, "The
-   technique" (dynamic debug on `csi2_fops.c`/`vi2_fops.c`).
-5. Sync back into the repo (if you edited an external tree) and regenerate the
-   patch documentation:
-   ```bash
-   git diff d3f7855bb --relative=source/public -- source/public/<file> \
-       > patches/00XX-short-name.patch
-   ```
-   New logical change = new numbered patch + a row in `patches/README.md`
-   (say *why*, not just what — the table is a debugging diary, keep it one).
-6. Refresh `prebuilt/` with the binaries you just verified, never with
-   unverified ones. If you verified a build, prebuilt gets *that* build.
+   `python3 nano/apps/camera_test.py --headless` (expect ~62.5 fps) and a
+   look at an actual frame. For anything CSI-related, enable the zero-cost
+   tracing first: `camera/docs/CAMERA_DEBUG.md`, "The technique".
+5. Document the change as a patch, before committing the source:
+   `git diff -- camera/kernel-source/<files> > camera/patches/00XX-short-name.patch`
+   and add a row to `camera/patches/README.md` saying *why*, not just what
+   (the table is a debugging diary: keep it one).
+6. Refresh `camera/prebuilt/` with the binaries you just verified, never with
+   unverified ones.
 7. One commit with all of it: source + patch + prebuilt + docs.
 
-Ground rules learned the hard way (see `docs/`): never rename the kernel
-LOCALVERSION (modules dir must equal `uname -r` or the Nano won't boot
-userspace); never "fix" a build error by disabling a driver or Kconfig option;
-debug prints don't ship — use `dev_dbg` + dynamic debug instead of `pr_info`.
+Rules learned the hard way (see `camera/docs/`): never change the kernel
+LOCALVERSION (the modules directory must equal `uname -r` or the Nano does
+not boot userspace); never "fix" a build error by disabling a driver or
+Kconfig option; debug prints do not ship (use `dev_dbg` + dynamic debug, not
+`pr_info`).
 
-## Adding/changing CV features (detection scripts, camera userspace)
+## Jetson userspace (`nano/`)
 
-1. Edit under `cv/cv_projects/` (repo) and rsync to the Jetson, or edit on the
-   Jetson and rsync back — but the repo copy is the one that counts.
-2. Test on the Jetson inside the venv (`source ~/cv_projects/venv/bin/activate`
-   — it already exports `OPENBLAS_CORETYPE` and `LD_PRELOAD`). All scripts
-   support `--headless` (MJPEG on `http://<jetson>:8090/`), so everything is
-   testable over SSH.
-3. Camera invariants that scripts must respect are listed in `cv/README.md`
-   ("Camera facts"): fixed 640x480 RAW10 mode, GRBG demosaic, bypass_mode=0.
-   Don't reintroduce GStreamer/Argus paths — they can't work with this sensor.
-4. New Python dependency? It must install on **Python 3.6 aarch64, offline
-   preferred**: add it to `setup/requirements_jetson.txt` only after testing
-   `pip install` on the Nano; if it needs compilation or a vendored wheel, put
-   the wheel in `setup/wheels/` (split any file ≥95 MB like torch:
-   `split -b 90M`, add the sha256 to a `SHA256SUM`, teach `setup_jetson.sh`
-   to reassemble — it already does this for torch, copy that pattern).
-5. If you touched `setup_jetson.sh` or the launcher, keep the three copies in
-   sync: this repo, the Jetson, and any Desktop backup in use.
+1. Edit in the repo, `host/sync_to_nano.sh`, test on the Jetson inside
+   `nano/.venv`. Every app supports `--headless` (MJPEG on port 8090), so
+   everything can be tested over SSH.
+2. Run `nano/tests/test_models.py` after touching inference code, and the
+   camera apps after touching capture code.
+3. Respect the camera facts in `nano/README.md` (fixed 640x480 RAW10 mode,
+   GRBG demosaic, bypass_mode=0). Do not reintroduce GStreamer/Argus paths:
+   they cannot work with this sensor.
+4. Code must run on **Python 3.6** (no dataclasses, no walrus, no
+   `from __future__ import annotations`).
+5. A new Python dependency must install **offline on Python 3.6 aarch64**:
+   download or build its wheel on the Jetson, add it to `nano/vendor/wheels/`,
+   pin it (and its dependencies) in `nano/setup/requirements.lock`, and check
+   that a fresh `setup_jetson.sh --no-apt` still ends with `ALL GOOD`.
+6. A new model: a folder in `nano/models/` per the
+   [model contract](docs/model-contract.md), built with
+   `nano/apps/build_engine.py`, passing `tests/test_models.py`.
 
-## Adding a new vendored archive (new sensor source drop, firmware, datasheets)
+## Training side (`training/`)
 
-Own top-level directory (`vendor/<name>/` pattern), with a README stating
-origin, date, license, and why it's vendored. Files ≥95 MB: split + checksum,
-as above. That's what keeps this repo useful after the upstream links die —
-which is its whole reason to exist.
+1. Work inside `training/.venv` (`training/setup/setup_host.sh`).
+2. Run `python tests/test_trainers.py` after touching `cvtrain/`: it trains,
+   exports and packages all four architectures on coco128 in a few minutes.
+3. A dependency change: update `setup/requirements.lock` from a working
+   environment (`uv pip freeze`, minus torch / torchvision / nvidia-* /
+   cuda-* / triton, which `setup_host.sh` installs for the local GPU).
 
 ## Publishing
 
-The repo currently lives locally (no remote). To publish:
-`gh auth login`, then
-`gh repo create jetson-nano-ov5647 --public --source . --push`.
-Largest file is 94 MB, so plain GitHub works — no LFS needed. Keep it that
-way: check any new file against the 100 MB limit *before* committing it.
+`gh repo create <name> --public --source . --push`. No Git LFS is needed as
+long as every file stays below 100 MB (check before committing:
+`find . -path ./.git -prune -o -size +95M -print` should list only
+originals that `largefiles.manifest` tracks).

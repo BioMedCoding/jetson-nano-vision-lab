@@ -1,6 +1,6 @@
 # Prebuilt kernel artifacts — ready to deploy, no build needed
 
-Built from exactly the sources in `../source/public/` (GCC 15.2.0 cross
+Built from exactly the sources in `../kernel-source/` (GCC 15.2.0 cross
 aarch64, config `../config/nano-ov5647.config`) and verified on hardware:
 OV5647 capturing at 62.5 fps, YOLOv5n TensorRT inference at 30.6 fps live
 (2026-07-18).

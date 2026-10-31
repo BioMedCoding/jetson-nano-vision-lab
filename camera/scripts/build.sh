@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Interactive build wizard for the Jetson Nano OV5647 kernel.
-# Builds dtbs + Image + modules from source/public/kernel/kernel-4.9,
+# Builds dtbs + Image + modules from camera/kernel-source/kernel/kernel-4.9,
 # which already has every patch in ../patches applied.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-KDIR="$REPO_ROOT/source/public/kernel/kernel-4.9"
+KDIR="$REPO_ROOT/kernel-source/kernel/kernel-4.9"
 
 BOLD=$'\033[1m'; RESET=$'\033[0m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RED=$'\033[31m'
 step()  { echo "${BOLD}==> $*${RESET}"; }
@@ -105,4 +105,4 @@ info "Built .ko module objects are still inside the source tree next to their"
 info "*.c files; deploy.sh runs 'make modules_install' straight onto the SD"
 info "card, there's no separate local staging step."
 echo
-info "Next: run ./scripts/deploy.sh to copy this onto the Jetson's SD card."
+info "Next: run camera/scripts/deploy.sh to copy this onto the Jetson's SD card."

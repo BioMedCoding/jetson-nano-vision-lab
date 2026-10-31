@@ -13,8 +13,8 @@ they were found, because the *method* matters as much as the fixes: three of
 the five were invisible until the previous one was removed.
 
 The full raw debugging log (in Italian, with every dead end and every dmesg
-excerpt) is in `OV5647_DEBUG_HANDOFF.it.md`. The kernel-side fixes are patches
-`0023`-`0025`; the userspace rules live in `../cv/cv_projects/common/camera.py`.
+excerpt) is in `DEBUG_LOG.md`. The kernel-side fixes are patches
+`0023`-`0025`; the userspace rules live in `../../nano/jetson_cv/camera.py`.
 
 ## The five problems
 

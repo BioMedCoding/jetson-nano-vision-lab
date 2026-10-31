@@ -1,142 +1,149 @@
-# Guida al setup — YOLOv5 su Jetson Nano (JetPack 4.6.1)
+# Jetson Nano setup guide (JetPack 4.6.1)
 
-Guida per creare da zero l'ambiente che fa girare la detection sulla camera
-OV5647. Vale per: **Jetson Nano, L4T R32.7.1 / JetPack 4.6.1, Ubuntu 18.04**.
+How the Python environment for `nano/` is built, why it is built that way,
+and what to do when something goes wrong. Applies to: **Jetson Nano 4 GB,
+L4T R32.7.1 / JetPack 4.6.1, Ubuntu 18.04**, with the OV5647 kernel from
+`camera/` booted.
 
-## Perché Python 3.6 (e perché prima non funzionava)
+## TL;DR
 
-Su JetPack 4.x le uniche versioni con accelerazione hardware sono legate a
-Python 3.6:
+```bash
+# on your PC: copy nano/ and tools/ to the Jetson (or git clone the repo there)
+host/sync_to_nano.sh
+# on the Jetson:
+~/jetson-nano-ov5647-vision/nano/setup/setup_jetson.sh          # ~5 min, offline except apt
+source ~/jetson-nano-ov5647-vision/nano/.venv/bin/activate
+```
 
-| Componente | Da dove arriva | Python |
+The script ends with a check that must print `ALL GOOD`.
+
+## Why Python 3.6, and why `--system-site-packages`
+
+On JetPack 4 the only hardware-accelerated builds are tied to Python 3.6:
+
+| Component | Comes from | Python |
 |---|---|---|
-| PyTorch 1.10 con CUDA | wheel NVIDIA (`setup/wheels/torch-1.10.0a0*.whl`) | **solo 3.6** |
-| torchvision 0.11 con CUDA | wheel Qengineering (`setup/wheels/torchvision-0.11*.whl`) | **solo 3.6** |
-| OpenCV 4.1.1 con GStreamer | pacchetto di sistema JetPack | **solo 3.6** |
-| TensorRT 8.2 | pacchetto di sistema JetPack | **solo 3.6** |
+| PyTorch 1.10 with CUDA | NVIDIA wheel, vendored in `vendor/wheels/` | **3.6 only** |
+| torchvision 0.11 with CUDA ops | Qengineering wheel, vendored | **3.6 only** |
+| OpenCV 4.1.1 | JetPack system package | **3.6 only** |
+| TensorRT 8.2 | JetPack system package | **3.6 only** |
 
-Il vecchio venv `jetson_yolo` era stato creato con **Python 3.8**: dentro non
-poteva esistere né torch con CUDA né `cv2` con GStreamer, da lì tutti gli
-errori di dipendenze. Un `pip install opencv-python` non risolve: la build
-PyPI **non ha GStreamer** e quindi non può aprire `nvarguscamerasrc`.
+A venv on any other Python (3.8, conda, ...) can have neither CUDA torch nor
+the system `cv2`/`tensorrt`, which is where most "dependency hell" on the
+Nano comes from. `pip install opencv-python` does not help either. The
+answer is a **Python 3.6 venv created with `--system-site-packages`**: it
+inherits NVIDIA's compiled libraries from the system and takes everything
+else from the vendored wheels.
 
-La soluzione è un venv **3.6** creato con `--system-site-packages`, che
-eredita dal sistema le librerie compilate da NVIDIA e prende da pip solo il
-resto (pinnato alle ultime versioni compatibili con 3.6).
+## Why everything is vendored
 
-## Setup automatico (consigliato)
+NVIDIA's download links for JetPack 4 wheels, forum attachments and old
+release assets disappear over time, and building pycuda or torchvision on the
+Nano takes 15-90 minutes and often fails on a modern toolchain. So:
 
-Sulla Jetson:
+- `vendor/wheels/` holds a wheel for every pip package (pycuda and matplotlib
+  pre-built for aarch64; torch stored as verified chunks, see
+  `tools/largefiles.py`);
+- `setup/requirements.lock` pins every package, direct and indirect, to the
+  version verified on 2026-10-31;
+- `pip install --no-index` means the install never touches PyPI.
 
-```bash
-cd ~/cv_projects/setup
-chmod +x setup_jetson.sh          # solo la prima volta
-./setup_jetson.sh                 # ambiente base (PyTorch)
-./setup_jetson.sh --trt           # base + extra TensorRT (pycuda, ~15 min in piu')
-```
+Only `apt` needs the network (a few system libraries the torch wheel links
+against); `setup_jetson.sh --no-apt` skips it on a machine that already has
+them.
 
-Serve la connessione a internet solo per apt e per le poche wheel pip
-(le due wheel "difficili", torch e torchvision, sono già in `setup/wheels/`).
-
-Al termine lo script esegue una verifica e deve stampare `TUTTO OK`.
-
-## Setup manuale (cosa fa lo script, passo per passo)
-
-```bash
-# 1. Dipendenze di sistema. Le librerie python "pesanti" (matplotlib, pandas,
-#    seaborn) arrivano da apt: compilarle con pip su Python 3.6/aarch64 non è
-#    più praticabile nel 2026.
-sudo apt-get update
-sudo apt-get install -y python3-venv python3-dev python3-pip \
-    libopenblas-base libopenmpi-dev libomp-dev libjpeg-dev zlib1g-dev \
-    python3-matplotlib python3-pandas python3-seaborn python3-pil
-
-# 2. Venv 3.6 che vede i pacchetti di sistema
-python3.6 -m venv --system-site-packages ~/cv_projects/venv
-source ~/cv_projects/venv/bin/activate
-export OPENBLAS_CORETYPE=ARMV8    # vedi Troubleshooting
-
-# 3. Tool pip: ultime versioni che supportano Python 3.6
-pip install --upgrade "pip==21.3.1" "setuptools==59.6.0" "wheel==0.37.1"
-
-# 4. Nell'ordine: numpy, poi torch, poi torchvision
-pip install numpy==1.19.5
-pip install ~/cv_projects/setup/wheels/torch-1.10.0a0+git36449ea-cp36-cp36m-linux_aarch64.whl
-pip install ~/cv_projects/setup/wheels/torchvision-0.11.0a0+fa347eb-cp36-cp36m-linux_aarch64.whl
-
-# 5. Il resto
-pip install -r ~/cv_projects/setup/requirements_jetson.txt
-```
-
-## Verifica rapida
+## What the script does, step by step
 
 ```bash
-source ~/cv_projects/venv/bin/activate
-python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-# atteso: 1.10.0a0+git36449ea True
-python -c "import cv2; print('GStreamer' in cv2.getBuildInformation())"
-# atteso: True
-python -c "import torchvision.ops"      # nessun errore = op CUDA ok
+# 1. system libraries for the torch wheel
+sudo apt-get install -y python3-venv python3-pip libopenblas-base libopenmpi-dev libomp-dev
+# 2. reassemble the chunked torch wheel and check its sha256
+python3 tools/largefiles.py join nano/
+# 3. the venv, plus three exports appended to its activate script
+python3.6 -m venv --system-site-packages nano/.venv
+#    OPENBLAS_CORETYPE=ARMV8, LD_PRELOAD=libgomp, PYTHONNOUSERSITE=1 (see Troubleshooting)
+# 4. every pip package, offline
+pip install --no-index --find-links nano/vendor/wheels -r nano/setup/requirements.lock
+pip install --no-index --find-links nano/vendor/wheels torch-1.10*.whl torchvision-0.11*.whl
+# 5. jetson-stats (jtop) system-wide, for the dashboard's System tab
+sudo -H pip3 install --no-index --find-links nano/vendor/wheels jetson-stats==4.3.2
 ```
 
-Poi il primo test reale (senza torch, solo camera):
+Then the first real test, camera only:
 
 ```bash
-cd ~/cv_projects/01_camera_test && python camera_test.py
+cd ~/jetson-nano-ov5647-vision/nano
+python3 apps/camera_test.py --headless      # expect "Real fps: 62.5"
+python3 tests/test_models.py                # every model on the reference images
 ```
+
+## Optional services
+
+- **Dashboard at boot**: `setup/install_service.sh` installs `cv-demo.service`
+  (restart on crash). Add `--allow-system-control` to let the web page change
+  power mode and fan settings. `--uninstall` removes it.
+- **Temperature-based fan control** (5 V PWM fan): `setup/install_fan_service.sh`
+  installs the vendored automagic-fan service and the narrow sudo rule the
+  dashboard needs to start/stop it.
 
 ## Troubleshooting
 
-**`Illegal instruction (core dumped)` appena importi numpy/torch**
-Bug noto di OpenBLAS sul Cortex-A57 della Nano. Soluzione:
-`export OPENBLAS_CORETYPE=ARMV8` (lo script lo aggiunge in automatico
-all'`activate` del venv; anche tutti gli script del progetto lo impostano).
+**`Illegal instruction (core dumped)` as soon as numpy/torch is imported**
+Known OpenBLAS bug on the Nano's Cortex-A57. Fix: `OPENBLAS_CORETYPE=ARMV8`.
+The venv's `activate` exports it, the systemd unit sets it, and every app sets
+it at start (`jetson_cv/runtime.py`).
 
-**La camera non si apre / si apre nera dopo un crash**
-Il daemon argus resta appeso: `sudo systemctl restart nvargus-daemon`.
-Verifica anche che il device esista (`ls /dev/video0`) e che il kernel in
-boot sia quello con il driver OV5647 (`uname -r` → `4.9.253`).
+**`cannot allocate memory in static TLS block` when importing cv2 after torch**
+Needs `LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1` *before* Python
+starts. Same three places as above; the apps re-launch themselves with it if
+it is missing.
 
-**`cv2` non si importa nel venv**
-Sei in un venv creato senza `--system-site-packages`, oppure con il Python
-sbagliato. Controlla: `cat ~/cv_projects/venv/pyvenv.cfg` → deve dire
-`version = 3.6.9` e `include-system-site-packages = true`. Se non è così,
-cancella il venv e rilancia il setup. Non installare mai `opencv-python`
-da pip in questo ambiente.
+**torch imports from `~/.local` instead of the venv**
+A `pip install --user torch` done at some point shadows the venv. The venv
+sets `PYTHONNOUSERSITE=1` to ignore `~/.local`; check with
+`python -c "import torch; print(torch.__file__)"` (must be under `nano/.venv`).
 
-**Prima inferenza lentissima (30-60 s)**
-Normale: cudnn fa l'autotuning e il modello viene "fuso" alla prima passata.
-Gli script fanno warmup, ma il primo avvio del processo resta lento.
+**The camera does not open**
+Check that the OV5647 kernel is booted (`ls /dev/video0`,
+`lsmod | grep ov5647`) and that nothing else holds the device: the dashboard
+service does (`systemctl stop cv-demo`, or `fuser /dev/video0`). Never try
+GStreamer / `nvarguscamerasrc` with this sensor: Argus has a fixed whitelist
+and will not accept it; capture is raw V4L2 (`jetson_cv/camera.py`). Kernel
+side: `camera/docs/HARDWARE.md`.
 
-**Out of memory / il desktop si blocca durante l'inferenza**
-La Nano ha 4 GB condivisi CPU+GPU. Assicurati che lo swap sia attivo
-(`free -h`), chiudi Chromium, e considera la modalità headless (`--headless`,
-senza X11 si liberano ~500 MB): lo stream si guarda dal browser del PC.
+**`cv2` does not import in the venv**
+The venv was created without `--system-site-packages` or with the wrong
+Python. `cat nano/.venv/pyvenv.cfg` must say `version = 3.6.9` and
+`include-system-site-packages = true`; otherwise delete `nano/.venv` and
+re-run the setup. Never `pip install opencv-python` here.
 
-**Prestazioni basse**
-`sudo nvpmodel -m 0 && sudo jetson_clocks` (modalità 10 W + clock fissi).
-Con yolov5n a 416: PyTorch FP16 ~4-6 FPS, TensorRT FP16 ~12-20 FPS.
+**"Invalid TensorRT engine" / engine fails to load**
+Engines are tied to the TensorRT version and GPU that built them; the
+vendored ones were built on JetPack 4.6.1. On another JetPack, rebuild:
+`python3 apps/build_engine.py <model-id>`. TensorRT 8.2 also prints "Using an
+engine plan file across different models of devices is not recommended"
+even for engines built on this very board: harmless.
 
-**Pannello Sistema della dashboard vuoto/`jtop_ok: false`**
-Il setup verifica `jtop` all'ultimo step ([7/7]): se manca (sistema nuovo),
-`sudo -H pip3 install -U jetson-stats && sudo systemctl restart jtop.service
-&& sudo usermod -aG jtop $USER`, poi disconnettersi/riconnettersi (serve una
-nuova sessione perché il gruppo venga effettivo). Su questo sistema è già
-installato e attivo, nessuna azione necessaria.
+**The first inference is very slow (30-60 s)**
+Normal for the PyTorch path: cuDNN autotunes on the first passes. The apps
+warm up, but the first start of a process stays slow. The TensorRT path
+does not have this problem.
 
-**Avvio automatico della dashboard al boot**
-`cv_projects/setup/install_demo_service.sh` installa un servizio systemd
-(`cv-demo.service`, restart automatico su crash). Va eseguito sulla Jetson
-con il proprio utente (usa sudo internamente).
+**Out of memory / the desktop freezes**
+The Nano has 4 GB shared between CPU and GPU. Make sure swap is on
+(`free -h`; JetPack's zram is usually enough, `setup_jetson.sh --swap` adds a
+4 GB swap file), close Chromium, and prefer `--headless` (without X11 about
+500 MB more are free): watch the stream from your PC's browser.
 
-**pip dà errori SSL o "requires a different Python"**
-Stai usando il pip di sistema o una versione troppo nuova/vecchia. Nel venv
-il pip giusto è il 21.3.1 (ultimo per Python 3.6), installato dal setup.
+**Low fps**
+`sudo nvpmodel -m 0 && sudo jetson_clocks` (MAXN mode, fixed clocks). With
+yolov5n at 416: about 30 fps live with TensorRT, about 16-18 with PyTorch
+FP16 (see `docs/benchmarks.md`).
 
-## Vecchi file superati da questo setup
+**Dashboard System tab empty / `jtop_ok: false`**
+jetson-stats missing, or your user is not yet in the `jtop` group: log out and
+back in after the setup (group changes need a new session).
 
-- `~/jetson_yolo/` — venv Python 3.8, causa originale del problema: si può cancellare
-- `~/test.py` — workaround "bridge" 3.8→3.6, non più necessario
-- `~/live_detect_v5.py` — sostituito da `02_live_detection/live_detect.py`
-- `~/Miniconda3-latest-Linux-aarch64.sh` — non serve (e conda su aarch64/py3.6 non aiuta)
-- `~/torch-1.10.0a0*.whl` — copiata in `setup/wheels/`, l'originale in home è ridondante
+**pip says SSL errors or "requires a different Python"**
+You are using the system pip, or a newer pip than Python 3.6 supports. Inside
+the venv pip is 21.3.1, the last version for Python 3.6.

@@ -28,7 +28,7 @@ this repo hard-drives that mux **low**, which selects CAM0. If you need the
 camera on CAM1 instead, you'd need to either drive that GPIO high instead, or
 extend the DT with an `i2c-mux-gpio` node the way NVIDIA's stock dual-IMX219
 overlay does it (see `tegra210-porg-camera-rbpcv2-dual-imx219.dtsi` in
-`source/public/hardware/` for the pattern) — this repo's DT does not do that,
+`kernel-source/hardware/` for the pattern) — this repo's DT does not do that,
 single-camera-on-CAM0 only.
 
 ### Sensor wiring the DT expects

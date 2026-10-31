@@ -1,3 +1,19 @@
+#!/usr/bin/env python3
+"""Standalone raw V4L2 capture test for the OV5647 driver: the lowest-level
+check that the kernel side works, with no dependency on the rest of the repo.
+
+    OPENBLAS_CORETYPE=ARMV8 python3 camera/tools/v4l2_raw_capture.py
+
+It sets VI bypass mode off, requests 640x480 RAW10 (BG10), streams 300
+frames printing progress every 20, then demosaics the last frame with all
+four Bayer orders and saves /tmp/ov5647_{bggr,rggb,gbrg,grbg}2bgr.jpg. The
+one with natural colours tells you the real Bayer order (GRBG for this
+sensor, whatever the driver label says). "timeout waiting for frame" means
+the CSI/VI path is not delivering: see camera/docs/CAMERA_DEBUG.md.
+
+Uses the system python3 (numpy and cv2 are JetPack system packages); stop
+anything else using /dev/video0 first (e.g. sudo systemctl stop cv-demo).
+"""
 import fcntl, struct, os, select, mmap, ctypes
 
 def IOWR(t, nr, size):

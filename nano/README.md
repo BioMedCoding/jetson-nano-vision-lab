@@ -1,117 +1,131 @@
-# cv_projects — Computer vision su Jetson Nano + OV5647
+# nano/: the computer-vision playground on the Jetson
 
-Base per i progetti di visione su questa Jetson Nano (JetPack 4.6.1,
-kernel 4.9.253 custom con driver OV5647). Detection YOLOv5 accelerata GPU,
-con percorso PyTorch e percorso TensorRT.
+Everything that runs on the Jetson Nano once the OV5647 camera works
+(`../camera/`): raw V4L2 capture, TensorRT inference for any model that
+follows the [model contract](../docs/model-contract.md), a web dashboard,
+benchmarks and dataset capture.
 
-## Partenza rapida
+Measured on a Jetson Nano 4 GB, JetPack 4.6.1, MAXN: camera 62.5 fps, YOLOv5n
+TensorRT FP16 at 416 about **30 fps live** (full numbers in
+[docs/benchmarks.md](../docs/benchmarks.md)).
 
-```bash
-# 1. una tantum: crea l'ambiente (vedi setup/SETUP_GUIDE.md per i dettagli)
-cd ~/cv_projects/setup && chmod +x setup_jetson.sh && ./setup_jetson.sh
-
-# 2. in ogni sessione:
-source ~/cv_projects/venv/bin/activate
-
-# 3. test camera, poi detection
-cd ~/cv_projects/01_camera_test  && python camera_test.py
-cd ~/cv_projects/02_live_detection && python live_detect.py
-```
-
-Senza monitor collegato gli script passano da soli in modalità stream:
-apri `http://<ip-della-jetson>:8090/` dal browser del PC.
-
-**Dashboard sperimentale** (sistema/statistiche/controlli live/tracker+zone,
-vedi §"Dashboard" più sotto):
+## Install
 
 ```bash
-cd ~/cv_projects/03_tensorrt
-python demo_server.py --engine ../models/yolov5n_416_fp16.engine --headless
+# from your PC (or git clone the repo on the Jetson)
+host/sync_to_nano.sh
+# on the Jetson
+~/jetson-nano-ov5647-vision/nano/setup/setup_jetson.sh
+source ~/jetson-nano-ov5647-vision/nano/.venv/bin/activate
+cd ~/jetson-nano-ov5647-vision/nano
 ```
 
-## Struttura
+Offline except for a few apt packages: every Python wheel is in
+`vendor/wheels/`. Details, the reasons behind the Python 3.6 venv, and
+troubleshooting: [setup/SETUP_GUIDE.md](setup/SETUP_GUIDE.md).
 
-| Cartella | Contenuto |
+## Apps
+
+Every app works with a monitor attached (OpenCV window) or headless (MJPEG
+stream at `http://<jetson>:8090/`, or always with `--headless`).
+
+| App | What it does |
 |---|---|
-| `setup/` | script di setup, guida, requirements, wheel torch/torchvision cp36, servizio systemd |
-| `models/` | pesi/engine YOLOv5(n/s)/v7-tiny/v8n + sidecar `.json` di metadata |
-| `common/` | camera CSI, viewer (finestra/MJPEG semplice), utils YOLO (decoder v5+v8), runner TRT, più `state.py`/`filters.py`/`tracker.py`/`jtop_client.py`/`dashboard_server.py`/`static/` per la dashboard |
-| `01_camera_test/` | verifica camera e FPS reali, snapshot — nessuna dipendenza da torch |
-| `02_live_detection/` | detection live PyTorch FP16 (per confronto) |
-| `03_tensorrt/` | build engine FP16, detection TensorRT minimale (`trt_detect.py`) e dashboard sperimentale (`demo_server.py`) |
-| `04_benchmark/` | confronto ms/FPS tra FP32, FP16 e TensorRT |
-| `05_dataset_capture/` | raccolta immagini per addestrare modelli custom |
-| `venv/` | (creato dal setup) ambiente Python 3.6 |
+| `apps/camera_test.py` | camera only, no AI: real fps, snapshots. Run it first |
+| `apps/trt_detect.py --model <id>` | the shortest complete pipeline: camera -> TensorRT -> boxes |
+| `apps/dashboard.py` | web dashboard: live video, system stats, inference statistics, image filters, thresholds, hot model switching, tracker with ROI enter/exit counting |
+| `apps/live_detect_torch.py` | the same with PyTorch instead of TensorRT, to see the difference (~16 vs ~30 fps) |
+| `apps/benchmark.py` | model time only, PyTorch FP32/FP16 vs TensorRT |
+| `apps/capture_dataset.py` | save frames (native 640x480) to build a training set |
+| `apps/build_engine.py` | add a model (ONNX or yolov5 .pt) and build its TensorRT engine |
+| `tests/test_models.py` | check every model on reference images, no camera needed |
 
-Il repo `~/yolov5` (clone v6.0) resta dov'è: gli script lo usano via
-`torch.hub.load(..., source='local')`.
+From the PC, `host/run_demo.sh [test|trt|torch|dashboard]` starts an app on
+the Jetson over SSH and opens the stream in your browser.
 
-## Dashboard sperimentale
+## Models
 
-`03_tensorrt/demo_server.py` è l'evoluzione di `trt_detect.py` in una vera
-piattaforma di test: stessa pipeline camera→TRT→box, più pagina web
-(`http://<jetson>:8090/`) a due colonne — **video e zona ROI sempre
-visibili a sinistra** (con barra di stato che lampeggia sui singoli
-ingressi/uscite dalla zona) mentre a destra si naviga tra le schede dei
-parametri, così si vede sempre l'effetto live di quello che si cambia:
+One folder per model in `models/`, each described by a `model.json`:
 
-- **Sistema** — CPU/GPU/RAM/temperature/ventola/power-mode da jetson-stats
-  (jtop), già installato di serie su questo sistema (sola lettura).
-- **Statistiche** — storico tempo di inferenza e fps (media/mediana/p95/
-  min/max/dev. standard, grafico con selettore serie), conteggi per classe
-  (frame corrente + ID unici cumulativi via tracker leggero), confidenza
-  media, picco massimo di presenze simultanee nella zona ROI.
-- **Immagine** — luminosità/contrasto/filtri (grigio/CLAHE/nitidezza/
-  sfocatura/contorni), applicati sia a schermo sia all'inferenza; ogni
-  controllo ha una breve spiegazione di quando/perché usarlo e dell'impatto
-  sulla detection.
-- **Rilevamento** — soglie conf/IoU regolabili live, cambio modello a caldo
-  da un menu, parametri extra (traiettorie, conteggio per classe), più i
-  controlli di performance/leggibilità: salto inferenza ogni N frame
-  (l'unica vera leva di fps su questo hardware), qualità JPEG dello stream,
-  filtro classi da mostrare.
-- **Alimentazione** — power mode (nvpmodel) e profilo ventola
-  automatico/manuale con slider velocità, più un tasto "Prestazioni
-  massime".
+| Model | Input | Live fps | Decoder |
+|---|---|---|---|
+| `yolov5n-416` | 416 | 30 | `yolo_v5` (default) |
+| `yolov7-tiny-416` | 416 | 23 | `yolo_v5` |
+| `yolov8n-416` | 416 | 22 | `yolo_v8` |
+| `yolov5s-416` | 416 | 20 | `yolo_v5` |
+| `yolov5m-416` | 416 | 10 | `yolo_v5` |
+| `yolov5s-640` | 640 | 10 | `yolo_v5` |
+| `yolov5l-416` | 416 | 6 | `yolo_v5` |
 
-Il vecchio testo bruciato sull'immagine (FPS/tempo inferenza) è stato
-rimosso: quei dati vivono nell'header e nel tab Statistiche, l'immagine
-resta pulita per mostrare solo detection e zona ROI.
+All are COCO-pretrained (80 classes). The `.engine` files were built on this
+exact setup (TensorRT 8.2.1, JetPack 4.6.1); on another JetPack rebuild them
+with `python3 apps/build_engine.py <id>`.
 
-Autostart al boot: `setup/install_demo_service.sh` (richiede sudo, va
-eseguito dall'utente sulla Jetson).
+Adding your own model:
 
-## Modelli disponibili e prestazioni (416×416 salvo indicazione, stanza con
-luce normale, `nvpmodel -m 0` + `jetson_clocks`)
+```bash
+# trained on your PC with training/ -> one command does copy + engine build + test
+host/deploy_model.sh training/export/<name>
+# or, on the Jetson, from any YOLO ONNX (decoder and input size read from the ONNX)
+python3 apps/build_engine.py ~/best.onnx --id my-model --labels classes.txt
+```
 
-| Modello | FPS live | Note |
-|---|---|---|
-| yolov5n | 30.6 | default, il più leggero |
-| yolov7-tiny | 23.4 | miglior compromesso: più accurato di n, quasi stessa velocità |
-| yolov5s | 19.9 | più accurato di n, circa 2/3 dell'fps |
-| yolov8n | ~21-26 | richiede decoder `postprocess_v8` (incluso), testa anchor-free |
-| yolov5s @640 | 10.0 | risoluzione più alta, stesso modello di yolov5s |
-| yolov5m | 10.3 | oltre questo punto la fluidità live scende molto |
-| yolov5l | 6.0 | funzionante ma impraticabile per una demo fluida; non vendorizzato nel repo (motivi di dimensione, vedi sotto) |
+## The dashboard
 
-Tutti gli engine tranne yolov5l sono già in `models/` con il sidecar di
-metadata che dice alla dashboard quale decoder usare (`postprocess`: `v5` per
-YOLOv5/v7, `v8` per YOLOv8 — vedi `build_engine.sh --postprocess`). yolov5l
-è riproducibile ma non incluso: il solo file `.engine` supera 180MB (limite
-soft del repo <95MB per file) per un guadagno di fluidità marginale.
+`python3 apps/dashboard.py` (or install it as a service:
+`setup/install_service.sh`). The page at `http://<jetson>:8090/` keeps the
+video and the ROI zone always visible on the left, with tabs on the right:
 
-## Modelli custom
+- **System**: CPU/GPU/RAM/temperatures/fan/power mode from jetson-stats.
+- **Statistics**: inference time and fps history (mean/median/p95/min/max/std),
+  per-class counts (current frame, and unique tracked IDs), mean confidence,
+  ROI totals and peak occupancy.
+- **Image**: brightness, contrast and filters (grayscale, CLAHE, sharpen,
+  blur, edges), applied to what you see AND to what the model sees, with a
+  note on how each affects detection: an educational test bench.
+- **Detection**: confidence/IoU thresholds, hot model switching, infer every
+  N frames (the one real fps lever on this hardware), stream quality, class
+  filter.
+- **Power**: power mode (nvpmodel), fan profile and speed, the optional
+  automagic-fan service. Disabled unless started with
+  `--allow-system-control`.
 
-1. Raccogli immagini con `05_dataset_capture/capture_images.py`
-2. Sul PC host (RTX 5070): etichetta e addestra — `~/jetson_work/cv_training/
-   run_pipeline.sh dataset/ yolov5n.pt --deploy matteo@<jetson>` fa da solo
-   validazione dataset→training→export→scp (dettagli in
-   `README_TRAINING.md` sull'host)
-3. Sulla Jetson: `03_tensorrt/build_engine.sh models/custom.onnx 416`
-   (aggiungi `--postprocess v8` se il modello ha una testa stile YOLOv8/senza
-   objectness esplicito — per YOLOv5/v7 non serve, viene dedotto)
-4. `python 03_tensorrt/demo_server.py --engine models/custom_416_fp16.engine --names classes.txt --headless`
-   (o `trt_detect.py` per la demo minimale)
+The dashboard has **no authentication**: anyone who can reach port 8090 can
+watch the camera. Run it on a network you trust, or `--bind 127.0.0.1` and
+use an SSH tunnel.
 
-Il percorso ONNX→TensorRT è quello consigliato per i modelli custom: evita
-ogni incompatibilità tra il PyTorch moderno dell'host e l'1.10 della Nano.
+## Code layout
+
+```
+jetson_cv/            the library the apps are built from
+  camera.py           raw V4L2 capture of the OV5647 (+ reconnecting wrapper)
+  display.py          window or MJPEG stream, shared frame store
+  models.py           model registry over models/*/model.json
+  inference/          preprocess (letterbox), TensorRT runner, decoders, Detector
+  dashboard/          shared state, HTTP/JSON server, static web page
+  system/             jetson-stats client, automagic-fan service control
+  runtime.py          JetPack workarounds applied before numpy/cv2/torch load
+  filters.py, tracker.py, drawing.py, labels.py
+apps/                 the programs above
+models/               one folder per model (model.json, model.onnx, model.fp16.engine)
+setup/                setup_jetson.sh, requirements.lock, systemd unit, service installers
+vendor/               wheels, yolov5 v6.0 (PyTorch path, .pt export), jetson-fan-ctl
+tests/                test_models.py
+```
+
+**Adding a new kind of model** (another detector head, or another task):
+write a decoder in `jetson_cv/inference/decoders.py` and register it, then
+give the model a `model.json` naming it. Nothing else changes. For a task
+other than detection (`"task"` in `model.json`), add a counterpart of
+`inference/detector.py` and a drawing function.
+
+## Camera facts that userspace must respect
+
+- The sensor mode is fixed: 640x480 RAW10 at about 60 fps. Other sizes are a
+  software resize.
+- Bayer order on the wire is **GRBG** (`cv2.COLOR_BayerGR2BGR`), whatever the
+  driver/device-tree label says (BGGR).
+- `TEGRA_CAMERA_CID_VI_BYPASS_MODE` must be 0 (camera.py sets it).
+- AEC/AGC run inside the sensor and need 1-3 s of streaming to converge.
+- GStreamer / `nvarguscamerasrc` will **never** work with this sensor: Argus
+  has a closed, fixed sensor whitelist.
