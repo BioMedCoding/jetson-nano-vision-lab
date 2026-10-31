@@ -79,6 +79,10 @@ python3 tests/test_models.py                # every model on the reference image
 
 ## Optional services
 
+- **Desktop shortcut** (nothing at boot): `setup/install_launcher.sh` puts a
+  "Vision Dashboard" icon on the desktop and in the applications menu. It
+  opens a terminal running the dashboard and the browser on
+  `http://localhost:8090/`; closing the terminal stops it.
 - **Dashboard at boot**: `setup/install_service.sh` installs `cv-demo.service`
   (restart on crash). Add `--allow-system-control` to let the web page change
   power mode and fan settings. `--uninstall` removes it.

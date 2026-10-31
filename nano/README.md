@@ -72,8 +72,9 @@ python3 apps/build_engine.py ~/best.onnx --id my-model --labels classes.txt
 
 ## The dashboard
 
-`python3 apps/dashboard.py` (or install it as a service:
-`setup/install_service.sh`). The page at `http://<jetson>:8090/` keeps the
+`python3 apps/dashboard.py --headless`, or a desktop shortcut
+(`setup/install_launcher.sh`, then double-click "Vision Dashboard"), or a
+service started at boot (`setup/install_service.sh`). The page at `http://<jetson>:8090/` keeps the
 video and the ROI zone always visible on the left, with tabs on the right:
 
 - **System**: CPU/GPU/RAM/temperatures/fan/power mode from jetson-stats.
@@ -108,7 +109,7 @@ jetson_cv/            the library the apps are built from
   filters.py, tracker.py, drawing.py, labels.py
 apps/                 the programs above
 models/               one folder per model (model.json, model.onnx, model.fp16.engine)
-setup/                setup_jetson.sh, requirements.lock, systemd unit, service installers
+setup/                setup_jetson.sh, requirements.lock, desktop launcher, systemd unit, service installers
 vendor/               wheels, yolov5 v6.0 (PyTorch path, .pt export), jetson-fan-ctl
 tests/                test_models.py
 ```
